@@ -30,7 +30,7 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "web-recap",
 	Short: "Extract browser history in LLM-friendly JSON format",
-	Long: `web-recap extracts browser history from Chrome, Chromium, Firefox, Safari, and Edge
+	Long: `web-recap extracts browser history from Chrome, Chromium, Firefox, Safari, Edge, Brave, and Vivaldi
 and outputs it in JSON format suitable for analysis by LLMs and other tools.
 
 Date and time inputs are interpreted in your local timezone by default.
@@ -49,7 +49,7 @@ Examples:
 }
 
 func init() {
-	rootCmd.Flags().StringVarP(&browserType, "browser", "b", "auto", "Browser type: auto, chrome, chromium, edge, brave, firefox, or safari")
+	rootCmd.Flags().StringVarP(&browserType, "browser", "b", "auto", "Browser type: auto, chrome, chromium, edge, brave, vivaldi, firefox, or safari")
 	rootCmd.Flags().StringVar(&date, "date", "", "Specific date (YYYY-MM-DD, interpreted in local timezone)")
 	rootCmd.Flags().StringVar(&startDate, "start-date", "", "Start date (YYYY-MM-DD, interpreted in local timezone)")
 	rootCmd.Flags().StringVar(&endDate, "end-date", "", "End date (YYYY-MM-DD, interpreted in local timezone)")
@@ -64,6 +64,7 @@ func init() {
 
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(listCmd)
+	rootCmd.AddCommand(bookmarksCmd)
 }
 
 func main() {
@@ -317,4 +318,116 @@ var listCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+var bookmarksCmd = &cobra.Command{
+	Use:   "bookmarks",
+	Short: "Extract browser bookmarks in JSON format",
+	Long: `Extract bookmarks from Chrome, Chromium, Firefox, Safari, Edge, Brave, and Vivaldi browsers
+and output them in JSON format.
+
+Examples:
+  web-recap bookmarks                          # Extract from default browser
+  web-recap bookmarks --browser chrome         # Extract from Chrome specifically
+  web-recap bookmarks --all-browsers           # Extract from all detected browsers
+  web-recap bookmarks -o bookmarks.json        # Save to file
+`,
+	RunE: runBookmarks,
+}
+
+func runBookmarks(cmd *cobra.Command, args []string) error {
+	// Get browser detector
+	detector := browser.NewDetector()
+
+	// Determine if we should query all browsers
+	useAllBrowsers := allBrowsers || browserType == "auto"
+
+	if useAllBrowsers {
+		// Query all browsers
+		entries, err := database.QueryMultipleBrowsersBookmarks(detector)
+		if err != nil {
+			return fmt.Errorf("failed to query bookmarks: %v", err)
+		}
+
+		// Write output
+		out := os.Stdout
+		if outputFile != "" {
+			f, err := os.Create(outputFile)
+			if err != nil {
+				return fmt.Errorf("failed to create output file: %v", err)
+			}
+			defer f.Close()
+			out = f
+		}
+
+		return output.FormatBookmarksJSON(out, entries, "all")
+	}
+
+	// Get specific browser
+	bType := browser.Type(browserType)
+	var b *browser.Browser
+	var bookmarkPath string
+
+	if dbPath != "" {
+		// Custom bookmark path provided
+		info, err := os.Stat(dbPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("bookmark file not found: %s", dbPath)
+			}
+			return fmt.Errorf("cannot access bookmark file: %v", err)
+		}
+
+		// For Firefox, dbPath might be a directory (profile path)
+		if info.IsDir() && bType != browser.Firefox {
+			return fmt.Errorf("path is a directory, not a file: %s", dbPath)
+		}
+
+		b = &browser.Browser{
+			Type: bType,
+			Name: string(bType),
+			Path: dbPath,
+		}
+		bookmarkPath = dbPath
+	} else {
+		// Auto-detect browser
+		var err error
+		b, err = detector.GetBrowser(bType)
+		if err != nil {
+			return fmt.Errorf("failed to get browser: %v", err)
+		}
+
+		// Get bookmark path
+		bookmarkPath, err = browser.GetBookmarkPath(b.Type)
+		if err != nil {
+			return fmt.Errorf("failed to get bookmark path: %v", err)
+		}
+
+		// For Firefox, find the profile
+		if b.Type == browser.Firefox {
+			bookmarkPath, err = browser.GetFirefoxProfilePath(bookmarkPath)
+			if err != nil {
+				return fmt.Errorf("failed to find Firefox profile: %v", err)
+			}
+		}
+	}
+
+	// Query bookmarks
+	entries, err := database.QueryBookmarks(b, bookmarkPath)
+	if err != nil {
+		return fmt.Errorf("failed to query bookmarks: %v", err)
+	}
+
+	// Write output
+	out := os.Stdout
+	if outputFile != "" {
+		f, err := os.Create(outputFile)
+		if err != nil {
+			return fmt.Errorf("failed to create output file: %v", err)
+		}
+		defer f.Close()
+		out = f
+	}
+
+	return output.FormatBookmarksJSON(out, entries, b.Name)
 }

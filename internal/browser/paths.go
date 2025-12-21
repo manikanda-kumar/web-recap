@@ -36,6 +36,8 @@ func getLinuxPath(home string, browserType Type) (string, error) {
 		return filepath.Join(home, ".config/microsoft-edge/Default/History"), nil
 	case Brave:
 		return filepath.Join(home, ".config/BraveSoftware/Brave-Browser/Default/History"), nil
+	case Vivaldi:
+		return filepath.Join(home, ".config/vivaldi/Default/History"), nil
 	case Firefox:
 		// Firefox uses profile directory, we'll handle this in detector
 		return filepath.Join(home, ".mozilla/firefox"), nil
@@ -59,6 +61,8 @@ func getDarwinPath(home string, browserType Type) (string, error) {
 		return filepath.Join(home, "Library/Application Support/Microsoft Edge/Default/History"), nil
 	case Brave:
 		return filepath.Join(home, "Library/Application Support/BraveSoftware/Brave-Browser/Default/History"), nil
+	case Vivaldi:
+		return filepath.Join(home, "Library/Application Support/Vivaldi/Default/History"), nil
 	case Firefox:
 		return filepath.Join(home, "Library/Application Support/Firefox"), nil
 	case Safari:
@@ -89,6 +93,8 @@ func getWindowsPath(browserType Type) (string, error) {
 		return filepath.Join(appData, `Microsoft\Edge\User Data\Default\History`), nil
 	case Brave:
 		return filepath.Join(appData, `BraveSoftware\Brave-Browser\User Data\Default\History`), nil
+	case Vivaldi:
+		return filepath.Join(appData, `Vivaldi\User Data\Default\History`), nil
 	case Firefox:
 		return filepath.Join(appData, "Mozilla/Firefox"), nil
 	case Safari:
@@ -156,4 +162,104 @@ func GetFirefoxProfilePath(profileBaseDir string) (string, error) {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// GetBookmarkPath returns the bookmark database path for a given browser type on the current platform
+func GetBookmarkPath(browserType Type) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+
+	switch runtime.GOOS {
+	case "linux":
+		return getLinuxBookmarkPath(home, browserType)
+	case "darwin":
+		return getDarwinBookmarkPath(home, browserType)
+	case "windows":
+		return getWindowsBookmarkPath(browserType)
+	default:
+		return "", ErrUnsupportedPlatform
+	}
+}
+
+func getLinuxBookmarkPath(home string, browserType Type) (string, error) {
+	switch browserType {
+	case Chrome:
+		return filepath.Join(home, ".config/google-chrome/Default/Bookmarks"), nil
+	case Chromium:
+		return filepath.Join(home, ".config/chromium/Default/Bookmarks"), nil
+	case Edge:
+		return filepath.Join(home, ".config/microsoft-edge/Default/Bookmarks"), nil
+	case Brave:
+		return filepath.Join(home, ".config/BraveSoftware/Brave-Browser/Default/Bookmarks"), nil
+	case Vivaldi:
+		return filepath.Join(home, ".config/vivaldi/Default/Bookmarks"), nil
+	case Firefox:
+		// Firefox bookmarks are in places.sqlite (same as history)
+		return filepath.Join(home, ".mozilla/firefox"), nil
+	case Safari:
+		// Safari not available on Linux
+		return "", ErrBrowserNotAvailable
+	case Auto:
+		return "", nil
+	default:
+		return "", ErrUnknownBrowser
+	}
+}
+
+func getDarwinBookmarkPath(home string, browserType Type) (string, error) {
+	switch browserType {
+	case Chrome:
+		return filepath.Join(home, "Library/Application Support/Google/Chrome/Default/Bookmarks"), nil
+	case Chromium:
+		return filepath.Join(home, "Library/Application Support/Chromium/Default/Bookmarks"), nil
+	case Edge:
+		return filepath.Join(home, "Library/Application Support/Microsoft Edge/Default/Bookmarks"), nil
+	case Brave:
+		return filepath.Join(home, "Library/Application Support/BraveSoftware/Brave-Browser/Default/Bookmarks"), nil
+	case Vivaldi:
+		return filepath.Join(home, "Library/Application Support/Vivaldi/Default/Bookmarks"), nil
+	case Firefox:
+		return filepath.Join(home, "Library/Application Support/Firefox"), nil
+	case Safari:
+		return filepath.Join(home, "Library/Safari/Bookmarks.plist"), nil
+	case Auto:
+		return "", nil
+	default:
+		return "", ErrUnknownBrowser
+	}
+}
+
+func getWindowsBookmarkPath(browserType Type) (string, error) {
+	appData := os.Getenv("LOCALAPPDATA")
+	if appData == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		appData = filepath.Join(home, "AppData/Local")
+	}
+
+	switch browserType {
+	case Chrome:
+		return filepath.Join(appData, `Google\Chrome\User Data\Default\Bookmarks`), nil
+	case Chromium:
+		return filepath.Join(appData, `Chromium\User Data\Default\Bookmarks`), nil
+	case Edge:
+		return filepath.Join(appData, `Microsoft\Edge\User Data\Default\Bookmarks`), nil
+	case Brave:
+		return filepath.Join(appData, `BraveSoftware\Brave-Browser\User Data\Default\Bookmarks`), nil
+	case Vivaldi:
+		return filepath.Join(appData, `Vivaldi\User Data\Default\Bookmarks`), nil
+	case Firefox:
+		return filepath.Join(appData, "Mozilla/Firefox"), nil
+	case Safari:
+		// Safari not available on Windows
+		return "", ErrBrowserNotAvailable
+	case Auto:
+		return "", nil
+	default:
+		return "", ErrUnknownBrowser
+	}
 }

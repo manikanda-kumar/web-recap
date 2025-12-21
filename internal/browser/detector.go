@@ -13,7 +13,7 @@ func (d *Detector) Detect() []Browser {
 	var browsers []Browser
 
 	// Check each browser type
-	for _, bType := range []Type{Chrome, Chromium, Edge, Brave, Firefox, Safari} {
+	for _, bType := range []Type{Chrome, Chromium, Edge, Brave, Vivaldi, Firefox, Safari} {
 		path, err := GetDatabasePath(bType)
 		if err != nil {
 			continue
@@ -43,6 +43,8 @@ func (d *Detector) Detect() []Browser {
 				name = "Microsoft Edge"
 			} else if bType == Brave {
 				name = "Brave"
+			} else if bType == Vivaldi {
+				name = "Vivaldi"
 			} else if bType == Safari {
 				name = "Safari"
 			}
@@ -101,6 +103,8 @@ func (d *Detector) GetBrowser(browserType Type) (*Browser, error) {
 		name = "Microsoft Edge"
 	} else if browserType == Brave {
 		name = "Brave"
+	} else if browserType == Vivaldi {
+		name = "Vivaldi"
 	} else if browserType == Safari {
 		name = "Safari"
 	}

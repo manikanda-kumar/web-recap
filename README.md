@@ -1,17 +1,20 @@
 # web-recap
 
-Extract browser history from Chrome, Chromium, Brave, Firefox, Safari, and Edge browsers and output it in JSON format suitable for analysis by LLMs and other tools.
+Extract browser history and bookmarks from Chrome, Chromium, Brave, Vivaldi, Firefox, Safari, and Edge browsers and output them in JSON format suitable for analysis by LLMs and other tools.
 
-> **Privacy:** This tool runs entirely on your machine and never transmits data. Your browser history stays local unless you explicitly pipe it to an external service (like an LLM API).
+> **Privacy:** This tool runs entirely on your machine and never transmits data. Your browser history and bookmarks stay local unless you explicitly pipe them to an external service (like an LLM API).
 
 ## Features
 
-- **Multi-browser support**: Chrome, Chromium, Edge, Brave, Firefox, and Safari
+- **Multi-browser support**: Chrome, Chromium, Edge, Brave, Vivaldi, Firefox, and Safari
 - **Cross-platform**: Works on Linux, macOS, and Windows
+- **History & Bookmarks**: Extract both browsing history and bookmarks
 - **Automatic detection**: Auto-detects installed browsers or specify manually
 - **Date filtering**: Extract history for specific dates or date ranges
 - **Timezone support**: Parse dates in your local timezone or specify any timezone
 - **Time filtering**: Extract history for specific hours or time ranges
+- **Folder structure**: Preserves bookmark folder hierarchy
+- **Tags support**: Extracts Firefox bookmark tags
 - **LLM-friendly output**: JSON format optimized for consumption by language models
 - **Minimal dependencies**: Pure Go implementation with no CGO required for better cross-platform compilation
 
@@ -68,6 +71,27 @@ web-recap list
 
 # Show version
 web-recap version
+```
+
+### Extract Bookmarks
+
+```bash
+# Extract bookmarks from default browser
+web-recap bookmarks
+
+# Extract from specific browser
+web-recap bookmarks --browser chrome
+web-recap bookmarks --browser firefox
+web-recap bookmarks --browser safari
+
+# Extract from all browsers
+web-recap bookmarks --all-browsers
+
+# Save to file
+web-recap bookmarks -o bookmarks.json
+
+# Custom bookmark path
+web-recap bookmarks --db-path /path/to/Bookmarks
 ```
 
 ### Extract History
@@ -131,7 +155,9 @@ web-recap --date 2025-12-15 --tz Europe/London --time 14
 web-recap --start-date 2025-12-09 --end-date 2025-12-15 --utc --all-browsers
 ```
 
-## JSON Output Format
+## JSON Output Formats
+
+### History Output Format
 
 The tool outputs history in the following JSON format:
 
@@ -156,7 +182,33 @@ The tool outputs history in the following JSON format:
 }
 ```
 
+### Bookmark Output Format
+
+The tool outputs bookmarks in the following JSON format:
+
+```json
+{
+  "browser": "chrome",
+  "total_entries": 150,
+  "entries": [
+    {
+      "date_added": "2025-12-15T10:30:00Z",
+      "date_modified": "2025-12-16T14:20:00Z",
+      "url": "https://example.com/article",
+      "title": "Interesting Article",
+      "folder": "Bookmarks Bar/Tech",
+      "domain": "example.com",
+      "browser": "chrome",
+      "tags": ["golang", "tutorial"]
+    },
+    ...
+  ]
+}
+```
+
 ## Output Fields
+
+### History Fields
 
 - **browser**: Browser name (chrome, firefox, safari, edge)
 - **start_date**: Report period start (ISO 8601 UTC format)
@@ -171,6 +223,20 @@ The tool outputs history in the following JSON format:
   - **domain**: Extracted domain name
   - **browser**: Browser source
 
+### Bookmark Fields
+
+- **browser**: Browser name (chrome, firefox, safari, edge, brave)
+- **total_entries**: Number of bookmark entries in the report
+- **entries**: Array of bookmark entries, each containing:
+  - **date_added**: When bookmark was created (ISO 8601 UTC format)
+  - **date_modified**: When bookmark was last modified (ISO 8601 UTC format, optional)
+  - **url**: Full URL of the bookmark
+  - **title**: Bookmark title
+  - **folder**: Folder path (e.g., "Bookmarks Bar/Work/Projects")
+  - **domain**: Extracted domain name
+  - **browser**: Browser source
+  - **tags**: Array of tags (Firefox only)
+
 ## LLM Usage
 
 The JSON output is designed to be easily consumed by language models. You can pipe the output directly to your LLM:
@@ -179,14 +245,18 @@ The JSON output is designed to be easily consumed by language models. You can pi
 # Get chrome history and pass to Claude
 web-recap --browser chrome --date 2025-12-15 | claude --prompt "Summarize my web activity"
 
+# Extract bookmarks for analysis
+web-recap bookmarks --all-browsers | claude --prompt "Organize my bookmarks by category"
+
 # Or save to file for later analysis
 web-recap --all-browsers --output history.json
+web-recap bookmarks --all-browsers --output bookmarks.json
 # Then use with your LLM as context
 ```
 
 ## Supported Browsers
 
-### Chrome/Chromium/Edge/Brave
+### Chrome/Chromium/Edge/Brave/Vivaldi
 - **Platforms**: Linux, macOS, Windows
 - **Database**: SQLite (`History` file)
 - **Timestamp format**: Microseconds since 1601-01-01
@@ -204,31 +274,71 @@ web-recap --all-browsers --output history.json
 ## Database Locations
 
 ### Linux
+
+**History:**
 - Chrome: `~/.config/google-chrome/Default/History`
 - Chromium: `~/.config/chromium/Default/History`
 - Edge: `~/.config/microsoft-edge/Default/History`
 - Brave: `~/.config/BraveSoftware/Brave-Browser/Default/History`
+- Vivaldi: `~/.config/vivaldi/Default/History`
 - Firefox: `~/.mozilla/firefox/*/places.sqlite`
 
+**Bookmarks:**
+- Chrome: `~/.config/google-chrome/Default/Bookmarks`
+- Chromium: `~/.config/chromium/Default/Bookmarks`
+- Edge: `~/.config/microsoft-edge/Default/Bookmarks`
+- Brave: `~/.config/BraveSoftware/Brave-Browser/Default/Bookmarks`
+- Vivaldi: `~/.config/vivaldi/Default/Bookmarks`
+- Firefox: `~/.mozilla/firefox/*/places.sqlite` (same as history)
+
 ### macOS
+
+**History:**
 - Chrome: `~/Library/Application Support/Google/Chrome/Default/History`
 - Chromium: `~/Library/Application Support/Chromium/Default/History`
 - Edge: `~/Library/Application Support/Microsoft Edge/Default/History`
 - Brave: `~/Library/Application Support/BraveSoftware/Brave-Browser/Default/History`
+- Vivaldi: `~/Library/Application Support/Vivaldi/Default/History`
 - Firefox: `~/Library/Application Support/Firefox/*/places.sqlite`
 - Safari: `~/Library/Safari/History.db`
 
+**Bookmarks:**
+- Chrome: `~/Library/Application Support/Google/Chrome/Default/Bookmarks`
+- Chromium: `~/Library/Application Support/Chromium/Default/Bookmarks`
+- Edge: `~/Library/Application Support/Microsoft Edge/Default/Bookmarks`
+- Brave: `~/Library/Application Support/BraveSoftware/Brave-Browser/Default/Bookmarks`
+- Vivaldi: `~/Library/Application Support/Vivaldi/Default/Bookmarks`
+- Firefox: `~/Library/Application Support/Firefox/*/places.sqlite` (same as history)
+- Safari: `~/Library/Safari/Bookmarks.plist`
+
 ### Windows
+
+**History:**
 - Chrome: `%LOCALAPPDATA%\Google\Chrome\User Data\Default\History`
 - Chromium: `%LOCALAPPDATA%\Chromium\User Data\Default\History`
 - Edge: `%LOCALAPPDATA%\Microsoft\Edge\User Data\Default\History`
 - Brave: `%LOCALAPPDATA%\BraveSoftware\Brave-Browser\User Data\Default\History`
+- Vivaldi: `%LOCALAPPDATA%\Vivaldi\User Data\Default\History`
 - Firefox: `%LOCALAPPDATA%\Mozilla\Firefox\*/places.sqlite`
+
+**Bookmarks:**
+- Chrome: `%LOCALAPPDATA%\Google\Chrome\User Data\Default\Bookmarks`
+- Chromium: `%LOCALAPPDATA%\Chromium\User Data\Default\Bookmarks`
+- Edge: `%LOCALAPPDATA%\Microsoft\Edge\User Data\Default\Bookmarks`
+- Brave: `%LOCALAPPDATA%\BraveSoftware\Brave-Browser\User Data\Default\Bookmarks`
+- Vivaldi: `%LOCALAPPDATA%\Vivaldi\User Data\Default\Bookmarks`
+- Firefox: `%LOCALAPPDATA%\Mozilla\Firefox\*/places.sqlite` (same as history)
 
 ## Technical Details
 
 ### Database Locking
-The tool automatically handles browser database locking by copying the database to a temporary file before reading it. This allows you to extract history while your browser is running.
+The tool automatically handles browser database locking by copying the database to a temporary file before reading it. This allows you to extract history and bookmarks while your browser is running.
+
+### Bookmark Formats
+Different browsers use different formats for storing bookmarks:
+- **Chrome/Chromium/Edge/Brave/Vivaldi**: JSON file format with hierarchical folder structure
+- **Firefox**: SQLite database (places.sqlite) with bookmarks in `moz_bookmarks` table, supports tags
+- **Safari**: Property list (plist) format
 
 ### Timestamp Conversion
 Each browser uses a different timestamp format which is automatically converted to ISO 8601 UTC format for consistency.

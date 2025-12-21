@@ -16,7 +16,7 @@ type HistoryQuerier interface {
 // NewQuerier creates a new history querier for the given browser
 func NewQuerier(b *browser.Browser) (HistoryQuerier, error) {
 	switch b.Type {
-	case browser.Chrome, browser.Chromium, browser.Edge, browser.Brave:
+	case browser.Chrome, browser.Chromium, browser.Edge, browser.Brave, browser.Vivaldi:
 		return NewChromeHandler(b.Path), nil
 	case browser.Firefox:
 		return NewFirefoxHandler(b.Path), nil

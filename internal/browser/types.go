@@ -9,6 +9,7 @@ const (
 	Firefox  Type = "firefox"
 	Safari   Type = "safari"
 	Brave    Type = "brave"
+	Vivaldi  Type = "vivaldi"
 	Auto     Type = "auto"
 )
 
