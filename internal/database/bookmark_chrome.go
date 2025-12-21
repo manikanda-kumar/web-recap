@@ -13,6 +13,8 @@ import (
 type ChromeBookmarkHandler struct {
 	bookmarkPath string
 	browserName  string
+	startTime    time.Time
+	endTime      time.Time
 }
 
 // NewChromeBookmarkHandler creates a new Chrome bookmark handler
@@ -49,7 +51,10 @@ type chromeBookmarkNode struct {
 }
 
 // GetBookmarks retrieves all bookmarks from Chrome
-func (h *ChromeBookmarkHandler) GetBookmarks() ([]models.BookmarkEntry, error) {
+func (h *ChromeBookmarkHandler) GetBookmarks(startTime, endTime time.Time) ([]models.BookmarkEntry, error) {
+	h.startTime = startTime
+	h.endTime = endTime
+
 	data, err := os.ReadFile(h.bookmarkPath)
 	if err != nil {
 		return nil, err
@@ -78,6 +83,16 @@ func (h *ChromeBookmarkHandler) extractFromNode(node chromeBookmarkNode, folderP
 		// This is a bookmark
 		dateAdded := h.convertChromeTimestamp(node.DateAdded)
 		dateModified := h.convertChromeTimestamp(node.DateModified)
+
+		// Filter by date if time range is specified
+		if !h.startTime.IsZero() || !h.endTime.IsZero() {
+			if !h.startTime.IsZero() && dateAdded.Before(h.startTime) {
+				return bookmarks
+			}
+			if !h.endTime.IsZero() && dateAdded.After(h.endTime) {
+				return bookmarks
+			}
+		}
 
 		bookmarks = append(bookmarks, models.BookmarkEntry{
 			DateAdded:    dateAdded,

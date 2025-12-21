@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"io"
 	"os"
+	"time"
 
 	"github.com/rzolkos/web-recap/internal/models"
 	_ "modernc.org/sqlite"
@@ -22,7 +23,7 @@ func NewFirefoxBookmarkHandler(dbPath string) *FirefoxBookmarkHandler {
 }
 
 // GetBookmarks retrieves all bookmarks from Firefox
-func (h *FirefoxBookmarkHandler) GetBookmarks() ([]models.BookmarkEntry, error) {
+func (h *FirefoxBookmarkHandler) GetBookmarks(startTime, endTime time.Time) ([]models.BookmarkEntry, error) {
 	// Copy database to temp location to avoid locking issues
 	tempDB, err := h.copyDatabase()
 	if err != nil {
@@ -71,6 +72,17 @@ func (h *FirefoxBookmarkHandler) GetBookmarks() ([]models.BookmarkEntry, error) 
 			continue
 		}
 
+		// Convert timestamp
+		dateAddedTime := ConvertFirefoxTimestamp(dateAdded)
+
+		// Filter by date if time range is specified
+		if !startTime.IsZero() && dateAddedTime.Before(startTime) {
+			continue
+		}
+		if !endTime.IsZero() && dateAddedTime.After(endTime) {
+			continue
+		}
+
 		// Get folder path
 		folderPath := h.getFolderPath(db, parent)
 
@@ -83,7 +95,7 @@ func (h *FirefoxBookmarkHandler) GetBookmarks() ([]models.BookmarkEntry, error) 
 		}
 
 		bookmarks = append(bookmarks, models.BookmarkEntry{
-			DateAdded:    ConvertFirefoxTimestamp(dateAdded),
+			DateAdded:    dateAddedTime,
 			DateModified: ConvertFirefoxTimestamp(dateModified),
 			URL:          url,
 			Title:        titleStr,

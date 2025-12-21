@@ -2,6 +2,7 @@ package database
 
 import (
 	"sort"
+	"time"
 
 	"github.com/rzolkos/web-recap/internal/browser"
 	"github.com/rzolkos/web-recap/internal/models"
@@ -9,7 +10,7 @@ import (
 
 // BookmarkQuerier defines the interface for querying browser bookmarks
 type BookmarkQuerier interface {
-	GetBookmarks() ([]models.BookmarkEntry, error)
+	GetBookmarks(startTime, endTime time.Time) ([]models.BookmarkEntry, error)
 }
 
 // NewBookmarkQuerier creates a new bookmark querier for the given browser
@@ -27,13 +28,13 @@ func NewBookmarkQuerier(b *browser.Browser, bookmarkPath string) (BookmarkQuerie
 }
 
 // QueryBookmarks retrieves bookmark entries from a specific browser
-func QueryBookmarks(b *browser.Browser, bookmarkPath string) ([]models.BookmarkEntry, error) {
+func QueryBookmarks(b *browser.Browser, bookmarkPath string, startTime, endTime time.Time) ([]models.BookmarkEntry, error) {
 	querier, err := NewBookmarkQuerier(b, bookmarkPath)
 	if err != nil {
 		return nil, err
 	}
 
-	entries, err := querier.GetBookmarks()
+	entries, err := querier.GetBookmarks(startTime, endTime)
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +48,7 @@ func QueryBookmarks(b *browser.Browser, bookmarkPath string) ([]models.BookmarkE
 }
 
 // QueryMultipleBrowsersBookmarks retrieves bookmarks from all detected browsers
-func QueryMultipleBrowsersBookmarks(detector *browser.Detector) ([]models.BookmarkEntry, error) {
+func QueryMultipleBrowsersBookmarks(detector *browser.Detector, startTime, endTime time.Time) ([]models.BookmarkEntry, error) {
 	var allEntries []models.BookmarkEntry
 
 	detectedBrowsers := detector.Detect()
@@ -73,7 +74,7 @@ func QueryMultipleBrowsersBookmarks(detector *browser.Detector) ([]models.Bookma
 			}
 		}
 
-		entries, err := QueryBookmarks(&br, bookmarkPath)
+		entries, err := QueryBookmarks(&br, bookmarkPath, startTime, endTime)
 		if err != nil {
 			// Log error but continue with other browsers
 			continue

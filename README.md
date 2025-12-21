@@ -10,7 +10,7 @@ Extract browser history and bookmarks from Chrome, Chromium, Brave, Vivaldi, Fir
 - **Cross-platform**: Works on Linux, macOS, and Windows
 - **History & Bookmarks**: Extract both browsing history and bookmarks
 - **Automatic detection**: Auto-detects installed browsers or specify manually
-- **Date filtering**: Extract history for specific dates or date ranges
+- **Date filtering**: Extract history and bookmarks for specific dates or date ranges
 - **Timezone support**: Parse dates in your local timezone or specify any timezone
 - **Time filtering**: Extract history for specific hours or time ranges
 - **Folder structure**: Preserves bookmark folder hierarchy
@@ -92,6 +92,18 @@ web-recap bookmarks -o bookmarks.json
 
 # Custom bookmark path
 web-recap bookmarks --db-path /path/to/Bookmarks
+
+# Filter by date - bookmarks added on specific date
+web-recap bookmarks --date 2025-12-15
+
+# Filter by date range - bookmarks added between dates
+web-recap bookmarks --start-date 2025-12-01 --end-date 2025-12-15
+
+# Combine with timezone support
+web-recap bookmarks --date 2025-12-15 --tz America/New_York
+
+# Get bookmarks from last week
+web-recap bookmarks --start-date 2025-12-09 --end-date 2025-12-16
 ```
 
 ### Extract History
@@ -153,6 +165,12 @@ web-recap --date 2025-12-15 --tz Europe/London --time 14
 
 # Explicitly use UTC (useful in scripts or CI)
 web-recap --start-date 2025-12-09 --end-date 2025-12-15 --utc --all-browsers
+
+# Get bookmarks about Claude added in the last week
+web-recap bookmarks --start-date 2025-12-09 --end-date 2025-12-16 | grep -i claude
+
+# Extract all bookmarks from Firefox added in December 2025
+web-recap bookmarks --browser firefox --start-date 2025-12-01 --end-date 2025-12-31
 ```
 
 ## JSON Output Formats
@@ -189,6 +207,9 @@ The tool outputs bookmarks in the following JSON format:
 ```json
 {
   "browser": "chrome",
+  "start_date": "2025-12-01T00:00:00Z",
+  "end_date": "2025-12-31T23:59:59Z",
+  "timezone": "America/New_York",
   "total_entries": 150,
   "entries": [
     {
@@ -205,6 +226,8 @@ The tool outputs bookmarks in the following JSON format:
   ]
 }
 ```
+
+Note: `start_date`, `end_date`, and `timezone` fields are only included when date filtering is used.
 
 ## Output Fields
 
@@ -226,6 +249,9 @@ The tool outputs bookmarks in the following JSON format:
 ### Bookmark Fields
 
 - **browser**: Browser name (chrome, firefox, safari, edge, brave)
+- **start_date**: Filter period start (ISO 8601 UTC format, only when date filtering is used)
+- **end_date**: Filter period end (ISO 8601 UTC format, only when date filtering is used)
+- **timezone**: Timezone used for date interpretation (only when date filtering is used)
 - **total_entries**: Number of bookmark entries in the report
 - **entries**: Array of bookmark entries, each containing:
   - **date_added**: When bookmark was created (ISO 8601 UTC format)
@@ -247,6 +273,10 @@ web-recap --browser chrome --date 2025-12-15 | claude --prompt "Summarize my web
 
 # Extract bookmarks for analysis
 web-recap bookmarks --all-browsers | claude --prompt "Organize my bookmarks by category"
+
+# Find bookmarks about a specific topic from last week
+web-recap bookmarks --start-date 2025-12-09 --end-date 2025-12-16 | \
+  claude --prompt "Show me all my bookmarks about Claude and AI agents"
 
 # Or save to file for later analysis
 web-recap --all-browsers --output history.json

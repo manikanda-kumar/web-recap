@@ -11,6 +11,8 @@ import (
 // SafariBookmarkHandler handles Safari bookmark extraction
 type SafariBookmarkHandler struct {
 	plistPath string
+	startTime time.Time
+	endTime   time.Time
 }
 
 // NewSafariBookmarkHandler creates a new Safari bookmark handler
@@ -38,7 +40,10 @@ type safariBookmarkNode struct {
 }
 
 // GetBookmarks retrieves all bookmarks from Safari
-func (h *SafariBookmarkHandler) GetBookmarks() ([]models.BookmarkEntry, error) {
+func (h *SafariBookmarkHandler) GetBookmarks(startTime, endTime time.Time) ([]models.BookmarkEntry, error) {
+	h.startTime = startTime
+	h.endTime = endTime
+
 	data, err := os.ReadFile(h.plistPath)
 	if err != nil {
 		return nil, err
@@ -72,6 +77,16 @@ func (h *SafariBookmarkHandler) extractFromNode(node safariBookmarkNode, folderP
 			if node.URIDictionary != nil {
 				if title, ok := node.URIDictionary["title"].(string); ok && title != "" && node.Title == "" {
 					node.Title = title
+				}
+			}
+
+			// Filter by date if time range is specified and date is available
+			if !dateAdded.IsZero() {
+				if !h.startTime.IsZero() && dateAdded.Before(h.startTime) {
+					return bookmarks
+				}
+				if !h.endTime.IsZero() && dateAdded.After(h.endTime) {
+					return bookmarks
 				}
 			}
 

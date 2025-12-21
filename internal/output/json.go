@@ -61,9 +61,22 @@ func FormatJSONLines(w io.Writer, entries []models.HistoryEntry) error {
 }
 
 // FormatBookmarksJSON writes bookmark report as JSON to the given writer
-func FormatBookmarksJSON(w io.Writer, entries []models.BookmarkEntry, browser string) error {
+func FormatBookmarksJSON(w io.Writer, entries []models.BookmarkEntry, browser string, startDate, endDate time.Time, tz string) error {
+	var startPtr, endPtr *time.Time
+
+	// Only include dates if they are specified
+	if !startDate.IsZero() {
+		startPtr = &startDate
+	}
+	if !endDate.IsZero() {
+		endPtr = &endDate
+	}
+
 	report := models.BookmarkReport{
 		Browser:      browser,
+		StartDate:    startPtr,
+		EndDate:      endPtr,
+		Timezone:     tz,
 		TotalEntries: len(entries),
 		Entries:      entries,
 	}
@@ -76,9 +89,21 @@ func FormatBookmarksJSON(w io.Writer, entries []models.BookmarkEntry, browser st
 }
 
 // FormatBookmarksJSONCompact writes bookmark report as compact JSON to the given writer
-func FormatBookmarksJSONCompact(w io.Writer, entries []models.BookmarkEntry, browser string) error {
+func FormatBookmarksJSONCompact(w io.Writer, entries []models.BookmarkEntry, browser string, startDate, endDate time.Time) error {
+	var startPtr, endPtr *time.Time
+
+	// Only include dates if they are specified
+	if !startDate.IsZero() {
+		startPtr = &startDate
+	}
+	if !endDate.IsZero() {
+		endPtr = &endDate
+	}
+
 	report := models.BookmarkReport{
 		Browser:      browser,
+		StartDate:    startPtr,
+		EndDate:      endPtr,
 		TotalEntries: len(entries),
 		Entries:      entries,
 	}

@@ -49,18 +49,19 @@ Examples:
 }
 
 func init() {
-	rootCmd.Flags().StringVarP(&browserType, "browser", "b", "auto", "Browser type: auto, chrome, chromium, edge, brave, vivaldi, firefox, or safari")
-	rootCmd.Flags().StringVar(&date, "date", "", "Specific date (YYYY-MM-DD, interpreted in local timezone)")
-	rootCmd.Flags().StringVar(&startDate, "start-date", "", "Start date (YYYY-MM-DD, interpreted in local timezone)")
-	rootCmd.Flags().StringVar(&endDate, "end-date", "", "End date (YYYY-MM-DD, interpreted in local timezone)")
-	rootCmd.Flags().StringVar(&startTime, "start-time", "", "Start time (HH:MM format)")
-	rootCmd.Flags().StringVar(&endTime, "end-time", "", "End time (HH:MM format)")
-	rootCmd.Flags().StringVar(&timeHour, "time", "", "Time hour shorthand (e.g., '12' for 12:00-12:59)")
-	rootCmd.Flags().StringVar(&timezone, "tz", "", "Timezone (e.g., America/New_York, UTC, local for system timezone)")
-	rootCmd.Flags().BoolVar(&utcMode, "utc", false, "Treat all dates/times as UTC instead of local timezone")
-	rootCmd.Flags().StringVarP(&outputFile, "output", "o", "", "Output file (default: stdout)")
-	rootCmd.Flags().StringVar(&dbPath, "db-path", "", "Custom database path")
-	rootCmd.Flags().BoolVar(&allBrowsers, "all-browsers", false, "Extract from all detected browsers")
+	// Persistent flags available to all subcommands
+	rootCmd.PersistentFlags().StringVarP(&browserType, "browser", "b", "auto", "Browser type: auto, chrome, chromium, edge, brave, vivaldi, firefox, or safari")
+	rootCmd.PersistentFlags().StringVar(&date, "date", "", "Specific date (YYYY-MM-DD, interpreted in local timezone)")
+	rootCmd.PersistentFlags().StringVar(&startDate, "start-date", "", "Start date (YYYY-MM-DD, interpreted in local timezone)")
+	rootCmd.PersistentFlags().StringVar(&endDate, "end-date", "", "End date (YYYY-MM-DD, interpreted in local timezone)")
+	rootCmd.PersistentFlags().StringVar(&startTime, "start-time", "", "Start time (HH:MM format)")
+	rootCmd.PersistentFlags().StringVar(&endTime, "end-time", "", "End time (HH:MM format)")
+	rootCmd.PersistentFlags().StringVar(&timeHour, "time", "", "Time hour shorthand (e.g., '12' for 12:00-12:59)")
+	rootCmd.PersistentFlags().StringVar(&timezone, "tz", "", "Timezone (e.g., America/New_York, UTC, local for system timezone)")
+	rootCmd.PersistentFlags().BoolVar(&utcMode, "utc", false, "Treat all dates/times as UTC instead of local timezone")
+	rootCmd.PersistentFlags().StringVarP(&outputFile, "output", "o", "", "Output file (default: stdout)")
+	rootCmd.PersistentFlags().StringVar(&dbPath, "db-path", "", "Custom database path")
+	rootCmd.PersistentFlags().BoolVar(&allBrowsers, "all-browsers", false, "Extract from all detected browsers")
 
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(listCmd)
@@ -327,15 +328,97 @@ var bookmarksCmd = &cobra.Command{
 and output them in JSON format.
 
 Examples:
-  web-recap bookmarks                          # Extract from default browser
+  web-recap bookmarks                          # Extract all bookmarks from default browser
   web-recap bookmarks --browser chrome         # Extract from Chrome specifically
   web-recap bookmarks --all-browsers           # Extract from all detected browsers
   web-recap bookmarks -o bookmarks.json        # Save to file
+  web-recap bookmarks --date 2025-12-15        # Extract bookmarks added on specific date
+  web-recap bookmarks --start-date 2025-12-01 --end-date 2025-12-15  # Date range
 `,
 	RunE: runBookmarks,
 }
 
 func runBookmarks(cmd *cobra.Command, args []string) error {
+	// Get timezone
+	loc, err := getTimezone(timezone, utcMode)
+	if err != nil {
+		return err
+	}
+
+	// Parse dates with timezone (same logic as history)
+	var startTimeValue, endTimeValue time.Time
+	var err2 error
+
+	if date != "" {
+		// Single date mode
+		start, err := parseDateTimeInLocation(date, "", loc)
+		if err != nil {
+			return err
+		}
+
+		if timeHour != "" {
+			// --time 12 means 12:00-12:59
+			hour, err := parseHour(timeHour)
+			if err != nil {
+				return err
+			}
+			startTimeValue = time.Date(start.Year(), start.Month(), start.Day(),
+				hour, 0, 0, 0, loc)
+			endTimeValue = startTimeValue.Add(1 * time.Hour)
+		} else if startTime != "" || endTime != "" {
+			// Explicit time range
+			var st, et string
+			if startTime != "" {
+				st = startTime
+			} else {
+				st = "00:00"
+			}
+			if endTime != "" {
+				et = endTime
+			} else {
+				et = "23:59"
+			}
+
+			startTimeValue, err = parseDateTimeInLocation(date, st, loc)
+			if err != nil {
+				return err
+			}
+			endTimeValue, err = parseDateTimeInLocation(date, et, loc)
+			if err != nil {
+				return err
+			}
+		} else {
+			// Full day
+			startTimeValue = start
+			endTimeValue = start.Add(24 * time.Hour)
+		}
+	} else if startDate != "" || endDate != "" {
+		// Date range mode
+		if startDate != "" {
+			startTimeValue, err2 = parseDateTimeInLocation(startDate, "", loc)
+			if err2 != nil {
+				return err2
+			}
+		}
+
+		if endDate != "" {
+			endTimeValue, err2 = parseDateTimeInLocation(endDate, "", loc)
+			if err2 != nil {
+				return err2
+			}
+			endTimeValue = endTimeValue.Add(24 * time.Hour)
+		}
+	}
+	// If no date specified, leave as zero values to return all bookmarks
+
+	// Convert to UTC for database query (important!)
+	if !startTimeValue.IsZero() {
+		startTimeValue = startTimeValue.UTC()
+	}
+	if !endTimeValue.IsZero() {
+		endTimeValue = endTimeValue.UTC()
+	}
+
 	// Get browser detector
 	detector := browser.NewDetector()
 
@@ -344,7 +427,7 @@ func runBookmarks(cmd *cobra.Command, args []string) error {
 
 	if useAllBrowsers {
 		// Query all browsers
-		entries, err := database.QueryMultipleBrowsersBookmarks(detector)
+		entries, err := database.QueryMultipleBrowsersBookmarks(detector, startTimeValue, endTimeValue)
 		if err != nil {
 			return fmt.Errorf("failed to query bookmarks: %v", err)
 		}
@@ -360,7 +443,7 @@ func runBookmarks(cmd *cobra.Command, args []string) error {
 			out = f
 		}
 
-		return output.FormatBookmarksJSON(out, entries, "all")
+		return output.FormatBookmarksJSON(out, entries, "all", startTimeValue, endTimeValue, timezone)
 	}
 
 	// Get specific browser
@@ -413,7 +496,7 @@ func runBookmarks(cmd *cobra.Command, args []string) error {
 	}
 
 	// Query bookmarks
-	entries, err := database.QueryBookmarks(b, bookmarkPath)
+	entries, err := database.QueryBookmarks(b, bookmarkPath, startTimeValue, endTimeValue)
 	if err != nil {
 		return fmt.Errorf("failed to query bookmarks: %v", err)
 	}
@@ -429,5 +512,5 @@ func runBookmarks(cmd *cobra.Command, args []string) error {
 		out = f
 	}
 
-	return output.FormatBookmarksJSON(out, entries, b.Name)
+	return output.FormatBookmarksJSON(out, entries, b.Name, startTimeValue, endTimeValue, timezone)
 }

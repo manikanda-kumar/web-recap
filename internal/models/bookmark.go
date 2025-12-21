@@ -17,6 +17,9 @@ type BookmarkEntry struct {
 // BookmarkReport represents a collection of bookmark entries
 type BookmarkReport struct {
 	Browser      string           `json:"browser"`
+	StartDate    *time.Time       `json:"start_date,omitempty"`
+	EndDate      *time.Time       `json:"end_date,omitempty"`
+	Timezone     string           `json:"timezone,omitempty"`
 	TotalEntries int              `json:"total_entries"`
 	Entries      []BookmarkEntry  `json:"entries"`
 }
