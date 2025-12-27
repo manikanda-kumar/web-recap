@@ -327,7 +327,28 @@ The tool outputs open tabs in the following JSON format:
 
 ## LLM Usage
 
-The JSON output is designed to be easily consumed by language models. You can save the output to files and use them as context:
+The JSON output is designed to be easily consumed by language models.
+
+### Using with Claude Code CLI
+
+If you have [Claude Code](https://github.com/anthropics/claude-code) installed:
+
+```bash
+# Save output to files and start Claude Code with them
+web-recap tabs -o tabs.json
+web-recap bookmarks --start-date 2025-12-20 -o recent-bookmarks.json
+web-recap --date 2025-12-27 -o today-history.json
+
+# Start Claude Code in the current directory
+claude-code
+
+# In the chat, ask Claude to analyze the files:
+# "Analyze my tabs.json and tell me what topics I'm researching"
+# "Based on today-history.json, summarize my browsing activity for today"
+# "Review recent-bookmarks.json and categorize them"
+```
+
+### Direct Analysis with Saved Files
 
 ```bash
 # Save history to file
@@ -339,18 +360,17 @@ web-recap bookmarks --all-browsers -o bookmarks.json
 # Save open tabs to file
 web-recap tabs -o tabs.json
 
-# Then attach these files to your LLM conversation or use them with the Anthropic API:
-# - In Claude.ai: Upload the JSON files when starting a conversation
-# - In API: Include the content in your messages
+# Use with Claude.ai: Upload the JSON files when starting a conversation
+# Use with Anthropic API: Include the content in your messages
 
-# Or pipe directly to other tools for processing
+# Or pipe to other tools for processing
 web-recap tabs | jq '.entries[] | select(.active==true) | .url'
 
-# Combine multiple sources
+# Combine multiple sources for comprehensive analysis
 web-recap --date 2025-12-27 -o today-history.json
 web-recap bookmarks --date 2025-12-27 -o today-bookmarks.json
 web-recap tabs -o current-tabs.json
-# Then use all three files as context in your LLM conversation
+# Then reference all three files in your LLM conversation
 ```
 
 ## Supported Browsers
