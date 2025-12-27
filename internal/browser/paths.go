@@ -263,3 +263,105 @@ func getWindowsBookmarkPath(browserType Type) (string, error) {
 		return "", ErrUnknownBrowser
 	}
 }
+
+// GetSessionPath returns the session directory path for a given browser type on the current platform
+// This is used for extracting open tabs from Chromium-based browsers
+func GetSessionPath(browserType Type) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+
+	switch runtime.GOOS {
+	case "linux":
+		return getLinuxSessionPath(home, browserType)
+	case "darwin":
+		return getDarwinSessionPath(home, browserType)
+	case "windows":
+		return getWindowsSessionPath(browserType)
+	default:
+		return "", ErrUnsupportedPlatform
+	}
+}
+
+func getLinuxSessionPath(home string, browserType Type) (string, error) {
+	switch browserType {
+	case Chrome:
+		return filepath.Join(home, ".config/google-chrome/Default/Sessions"), nil
+	case Chromium:
+		return filepath.Join(home, ".config/chromium/Default/Sessions"), nil
+	case Edge:
+		return filepath.Join(home, ".config/microsoft-edge/Default/Sessions"), nil
+	case Brave:
+		return filepath.Join(home, ".config/BraveSoftware/Brave-Browser/Default/Sessions"), nil
+	case Vivaldi:
+		return filepath.Join(home, ".config/vivaldi/Default/Sessions"), nil
+	case Firefox, Safari:
+		return "", ErrBrowserNotAvailable
+	case Auto:
+		return "", nil
+	default:
+		return "", ErrUnknownBrowser
+	}
+}
+
+func getDarwinSessionPath(home string, browserType Type) (string, error) {
+	switch browserType {
+	case Chrome:
+		return filepath.Join(home, "Library/Application Support/Google/Chrome/Default/Sessions"), nil
+	case Chromium:
+		return filepath.Join(home, "Library/Application Support/Chromium/Default/Sessions"), nil
+	case Edge:
+		return filepath.Join(home, "Library/Application Support/Microsoft Edge/Default/Sessions"), nil
+	case Brave:
+		return filepath.Join(home, "Library/Application Support/BraveSoftware/Brave-Browser/Default/Sessions"), nil
+	case Vivaldi:
+		return filepath.Join(home, "Library/Application Support/Vivaldi/Default/Sessions"), nil
+	case Firefox, Safari:
+		return "", ErrBrowserNotAvailable
+	case Auto:
+		return "", nil
+	default:
+		return "", ErrUnknownBrowser
+	}
+}
+
+func getWindowsSessionPath(browserType Type) (string, error) {
+	appData := os.Getenv("LOCALAPPDATA")
+	if appData == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		appData = filepath.Join(home, "AppData/Local")
+	}
+
+	switch browserType {
+	case Chrome:
+		return filepath.Join(appData, `Google\Chrome\User Data\Default\Sessions`), nil
+	case Chromium:
+		return filepath.Join(appData, `Chromium\User Data\Default\Sessions`), nil
+	case Edge:
+		return filepath.Join(appData, `Microsoft\Edge\User Data\Default\Sessions`), nil
+	case Brave:
+		return filepath.Join(appData, `BraveSoftware\Brave-Browser\User Data\Default\Sessions`), nil
+	case Vivaldi:
+		return filepath.Join(appData, `Vivaldi\User Data\Default\Sessions`), nil
+	case Firefox, Safari:
+		return "", ErrBrowserNotAvailable
+	case Auto:
+		return "", nil
+	default:
+		return "", ErrUnknownBrowser
+	}
+}
+
+// IsChromiumBased returns true if the browser uses Chromium's SNSS session format
+func IsChromiumBased(browserType Type) bool {
+	switch browserType {
+	case Chrome, Chromium, Edge, Brave, Vivaldi:
+		return true
+	default:
+		return false
+	}
+}

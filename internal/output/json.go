@@ -127,3 +127,45 @@ func FormatBookmarksJSONLines(w io.Writer, entries []models.BookmarkEntry) error
 
 	return nil
 }
+
+// FormatTabsJSON writes tab report as JSON to the given writer
+func FormatTabsJSON(w io.Writer, entries []models.TabEntry, browser string) error {
+	// Count unique windows
+	windowSet := make(map[int]bool)
+	for _, e := range entries {
+		windowSet[e.WindowID] = true
+	}
+
+	report := models.TabReport{
+		Browser:      browser,
+		TotalTabs:    len(entries),
+		TotalWindows: len(windowSet),
+		Entries:      entries,
+	}
+
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
+	encoder.SetEscapeHTML(false)
+
+	return encoder.Encode(report)
+}
+
+// FormatTabsJSONCompact writes tab report as compact JSON to the given writer
+func FormatTabsJSONCompact(w io.Writer, entries []models.TabEntry, browser string) error {
+	windowSet := make(map[int]bool)
+	for _, e := range entries {
+		windowSet[e.WindowID] = true
+	}
+
+	report := models.TabReport{
+		Browser:      browser,
+		TotalTabs:    len(entries),
+		TotalWindows: len(windowSet),
+		Entries:      entries,
+	}
+
+	encoder := json.NewEncoder(w)
+	encoder.SetEscapeHTML(false)
+
+	return encoder.Encode(report)
+}

@@ -66,6 +66,7 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(bookmarksCmd)
+	rootCmd.AddCommand(tabsCmd)
 }
 
 func main() {
@@ -336,6 +337,127 @@ Examples:
   web-recap bookmarks --start-date 2025-12-01 --end-date 2025-12-15  # Date range
 `,
 	RunE: runBookmarks,
+}
+
+var tabsCmd = &cobra.Command{
+	Use:   "tabs",
+	Short: "Extract open browser tabs in JSON format",
+	Long: `Extract open tabs from Chromium-based browsers (Chrome, Chromium, Edge, Brave, Vivaldi)
+and output them in JSON format.
+
+Note: This feature only works with Chromium-based browsers. Firefox and Safari are not supported yet.
+Also note that the browser's session files may not be immediately updated, so there may be
+a slight delay between actual browser state and what is reported.
+
+Examples:
+  web-recap tabs                          # Extract open tabs from default Chromium browser
+  web-recap tabs --browser chrome         # Extract from Chrome specifically
+  web-recap tabs --browser vivaldi        # Extract from Vivaldi
+  web-recap tabs --all-browsers           # Extract from all detected Chromium browsers
+  web-recap tabs -o tabs.json             # Save to file
+`,
+	RunE: runTabs,
+}
+
+func runTabs(cmd *cobra.Command, args []string) error {
+	detector := browser.NewDetector()
+
+	// Determine if we should query all browsers
+	useAllBrowsers := allBrowsers || browserType == "auto"
+
+	if useAllBrowsers {
+		// Query all Chromium-based browsers
+		entries, err := database.QueryMultipleBrowsersTabs(detector)
+		if err != nil {
+			return fmt.Errorf("failed to query tabs: %v", err)
+		}
+
+		if len(entries) == 0 {
+			return fmt.Errorf("no open tabs found (only Chromium-based browsers are supported)")
+		}
+
+		// Write output
+		out := os.Stdout
+		if outputFile != "" {
+			f, err := os.Create(outputFile)
+			if err != nil {
+				return fmt.Errorf("failed to create output file: %v", err)
+			}
+			defer f.Close()
+			out = f
+		}
+
+		return output.FormatTabsJSON(out, entries, "all")
+	}
+
+	// Get specific browser
+	bType := browser.Type(browserType)
+
+	// Check if it's a Chromium-based browser
+	if !browser.IsChromiumBased(bType) {
+		return fmt.Errorf("tabs extraction only supported for Chromium-based browsers (chrome, chromium, edge, brave, vivaldi)")
+	}
+
+	var b *browser.Browser
+	var sessionPath string
+
+	if dbPath != "" {
+		// Custom session path provided
+		info, err := os.Stat(dbPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("session path not found: %s", dbPath)
+			}
+			return fmt.Errorf("cannot access session path: %v", err)
+		}
+
+		if !info.IsDir() {
+			return fmt.Errorf("session path must be a directory: %s", dbPath)
+		}
+
+		b = &browser.Browser{
+			Type: bType,
+			Name: string(bType),
+			Path: dbPath,
+		}
+		sessionPath = dbPath
+	} else {
+		// Auto-detect browser
+		var err error
+		b, err = detector.GetBrowser(bType)
+		if err != nil {
+			return fmt.Errorf("failed to get browser: %v", err)
+		}
+
+		// Get session path
+		sessionPath, err = browser.GetSessionPath(b.Type)
+		if err != nil {
+			return fmt.Errorf("failed to get session path: %v", err)
+		}
+	}
+
+	// Query tabs
+	entries, err := database.QueryTabs(b, sessionPath)
+	if err != nil {
+		return fmt.Errorf("failed to query tabs: %v", err)
+	}
+
+	if len(entries) == 0 {
+		return fmt.Errorf("no open tabs found")
+	}
+
+	// Write output
+	out := os.Stdout
+	if outputFile != "" {
+		f, err := os.Create(outputFile)
+		if err != nil {
+			return fmt.Errorf("failed to create output file: %v", err)
+		}
+		defer f.Close()
+		out = f
+	}
+
+	return output.FormatTabsJSON(out, entries, b.Name)
 }
 
 func runBookmarks(cmd *cobra.Command, args []string) error {
