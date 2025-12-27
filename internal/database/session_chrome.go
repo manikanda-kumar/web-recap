@@ -364,6 +364,14 @@ func (p *SessionParser) buildTabEntries(browserName string) []models.TabEntry {
 				continue
 			}
 
+			// Skip browser extension URLs (chrome-extension://, moz-extension://, etc.)
+			if strings.HasPrefix(tabURL, "chrome-extension://") ||
+				strings.HasPrefix(tabURL, "moz-extension://") ||
+				strings.HasPrefix(tabURL, "edge-extension://") ||
+				strings.HasPrefix(tabURL, "brave-extension://") {
+				continue
+			}
+
 			// Extract domain
 			domain := ExtractDomain(tabURL)
 
