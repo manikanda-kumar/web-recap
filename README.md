@@ -22,7 +22,7 @@ Extract browser history and bookmarks from Chrome, Chromium, Brave, Vivaldi, Fir
 
 ### Download Binary
 
-Download the latest binary from [GitHub Releases](https://github.com/robzolkos/web-recap/releases):
+Download the latest binary from [GitHub Releases](https://github.com/manikanda-kumar/web-recap/releases):
 
 | Platform | Binary |
 |----------|--------|
@@ -33,15 +33,15 @@ Download the latest binary from [GitHub Releases](https://github.com/robzolkos/w
 
 ```bash
 # Linux
-curl -L https://github.com/robzolkos/web-recap/releases/latest/download/web-recap-linux-amd64 -o ~/.local/bin/web-recap
+curl -L https://github.com/manikanda-kumar/web-recap/releases/latest/download/web-recap-linux-amd64 -o ~/.local/bin/web-recap
 chmod +x ~/.local/bin/web-recap
 
 # macOS (Apple Silicon)
-curl -L https://github.com/robzolkos/web-recap/releases/latest/download/web-recap-darwin-arm64 -o ~/.local/bin/web-recap
+curl -L https://github.com/manikanda-kumar/web-recap/releases/latest/download/web-recap-darwin-arm64 -o ~/.local/bin/web-recap
 chmod +x ~/.local/bin/web-recap
 
 # macOS (Intel)
-curl -L https://github.com/robzolkos/web-recap/releases/latest/download/web-recap-darwin-amd64 -o ~/.local/bin/web-recap
+curl -L https://github.com/manikanda-kumar/web-recap/releases/latest/download/web-recap-darwin-amd64 -o ~/.local/bin/web-recap
 chmod +x ~/.local/bin/web-recap
 ```
 
@@ -52,7 +52,7 @@ chmod +x ~/.local/bin/web-recap
 Requires Go 1.21+
 
 ```bash
-git clone https://github.com/robzolkos/web-recap.git
+git clone https://github.com/manikanda-kumar/web-recap.git
 cd web-recap
 go build ./cmd/web-recap
 ./web-recap --help
