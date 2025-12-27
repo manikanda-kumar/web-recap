@@ -8,7 +8,7 @@ Extract browser history and bookmarks from Chrome, Chromium, Brave, Vivaldi, Fir
 
 - **Multi-browser support**: Chrome, Chromium, Edge, Brave, Vivaldi, Firefox, and Safari
 - **Cross-platform**: Works on Linux, macOS, and Windows
-- **History & Bookmarks**: Extract both browsing history and bookmarks
+- **History, Bookmarks & Open Tabs**: Extract browsing history, bookmarks, and currently open tabs
 - **Automatic detection**: Auto-detects installed browsers or specify manually
 - **Date filtering**: Extract history and bookmarks for specific dates or date ranges
 - **Timezone support**: Parse dates in your local timezone or specify any timezone
@@ -105,6 +105,30 @@ web-recap bookmarks --date 2025-12-15 --tz America/New_York
 # Get bookmarks from last week
 web-recap bookmarks --start-date 2025-12-09 --end-date 2025-12-16
 ```
+
+### Extract Open Tabs
+
+Extract currently open tabs from Chromium-based browsers (Chrome, Chromium, Edge, Brave, Vivaldi).
+
+```bash
+# Extract open tabs from all Chromium browsers
+web-recap tabs
+
+# Extract from specific browser
+web-recap tabs --browser chrome
+web-recap tabs --browser vivaldi
+
+# Extract from all detected Chromium browsers
+web-recap tabs --all-browsers
+
+# Save to file
+web-recap tabs -o tabs.json
+
+# Custom session path
+web-recap tabs --db-path /path/to/Sessions
+```
+
+> **Note:** Open tabs extraction only works with Chromium-based browsers. Firefox and Safari are not yet supported. There may be a slight delay between actual browser state and what is reported, as browsers don't immediately flush session data to disk.
 
 ### Extract History
 
@@ -229,6 +253,30 @@ The tool outputs bookmarks in the following JSON format:
 
 Note: `start_date`, `end_date`, and `timezone` fields are only included when date filtering is used.
 
+### Tabs Output Format
+
+The tool outputs open tabs in the following JSON format:
+
+```json
+{
+  "browser": "Google Chrome",
+  "total_tabs": 15,
+  "total_windows": 2,
+  "entries": [
+    {
+      "url": "https://example.com/page",
+      "title": "Example Page Title",
+      "domain": "example.com",
+      "active": true,
+      "group": "Research",
+      "window_id": 1,
+      "browser": "Google Chrome"
+    },
+    ...
+  ]
+}
+```
+
 ## Output Fields
 
 ### History Fields
@@ -263,6 +311,20 @@ Note: `start_date`, `end_date`, and `timezone` fields are only included when dat
   - **browser**: Browser source
   - **tags**: Array of tags (Firefox only)
 
+### Tabs Fields
+
+- **browser**: Browser name (chrome, vivaldi, edge, brave)
+- **total_tabs**: Number of open tabs
+- **total_windows**: Number of browser windows
+- **entries**: Array of tab entries, each containing:
+  - **url**: Current URL of the tab
+  - **title**: Page title
+  - **domain**: Extracted domain name
+  - **active**: Whether this is the active tab in the window
+  - **group**: Tab group name (if grouped, Chromium feature)
+  - **window_id**: Window identifier
+  - **browser**: Browser source
+
 ## LLM Usage
 
 The JSON output is designed to be easily consumed by language models. You can pipe the output directly to your LLM:
@@ -273,6 +335,9 @@ web-recap --browser chrome --date 2025-12-15 | claude --prompt "Summarize my web
 
 # Extract bookmarks for analysis
 web-recap bookmarks --all-browsers | claude --prompt "Organize my bookmarks by category"
+
+# Get open tabs and summarize current research
+web-recap tabs | claude --prompt "What topics am I currently researching based on my open tabs?"
 
 # Find bookmarks about a specific topic from last week
 web-recap bookmarks --start-date 2025-12-09 --end-date 2025-12-16 | \
@@ -321,6 +386,13 @@ web-recap bookmarks --all-browsers --output bookmarks.json
 - Vivaldi: `~/.config/vivaldi/Default/Bookmarks`
 - Firefox: `~/.mozilla/firefox/*/places.sqlite` (same as history)
 
+**Sessions (Open Tabs):**
+- Chrome: `~/.config/google-chrome/Default/Sessions/`
+- Chromium: `~/.config/chromium/Default/Sessions/`
+- Edge: `~/.config/microsoft-edge/Default/Sessions/`
+- Brave: `~/.config/BraveSoftware/Brave-Browser/Default/Sessions/`
+- Vivaldi: `~/.config/vivaldi/Default/Sessions/`
+
 ### macOS
 
 **History:**
@@ -341,6 +413,13 @@ web-recap bookmarks --all-browsers --output bookmarks.json
 - Firefox: `~/Library/Application Support/Firefox/*/places.sqlite` (same as history)
 - Safari: `~/Library/Safari/Bookmarks.plist`
 
+**Sessions (Open Tabs):**
+- Chrome: `~/Library/Application Support/Google/Chrome/Default/Sessions/`
+- Chromium: `~/Library/Application Support/Chromium/Default/Sessions/`
+- Edge: `~/Library/Application Support/Microsoft Edge/Default/Sessions/`
+- Brave: `~/Library/Application Support/BraveSoftware/Brave-Browser/Default/Sessions/`
+- Vivaldi: `~/Library/Application Support/Vivaldi/Default/Sessions/`
+
 ### Windows
 
 **History:**
@@ -359,6 +438,13 @@ web-recap bookmarks --all-browsers --output bookmarks.json
 - Vivaldi: `%LOCALAPPDATA%\Vivaldi\User Data\Default\Bookmarks`
 - Firefox: `%LOCALAPPDATA%\Mozilla\Firefox\*/places.sqlite` (same as history)
 
+**Sessions (Open Tabs):**
+- Chrome: `%LOCALAPPDATA%\Google\Chrome\User Data\Default\Sessions\`
+- Chromium: `%LOCALAPPDATA%\Chromium\User Data\Default\Sessions\`
+- Edge: `%LOCALAPPDATA%\Microsoft\Edge\User Data\Default\Sessions\`
+- Brave: `%LOCALAPPDATA%\BraveSoftware\Brave-Browser\User Data\Default\Sessions\`
+- Vivaldi: `%LOCALAPPDATA%\Vivaldi\User Data\Default\Sessions\`
+
 ## Technical Details
 
 ### Database Locking
@@ -369,6 +455,13 @@ Different browsers use different formats for storing bookmarks:
 - **Chrome/Chromium/Edge/Brave/Vivaldi**: JSON file format with hierarchical folder structure
 - **Firefox**: SQLite database (places.sqlite) with bookmarks in `moz_bookmarks` table, supports tags
 - **Safari**: Property list (plist) format
+
+### Session Files (Open Tabs)
+Chromium-based browsers store session data in SNSS (Session Storage) binary format:
+- Session files are located in the `Sessions/` directory
+- Files named `Session_*` or `Tabs_*` contain the current session state
+- The parser reads the most recently modified session file
+- Tab groups and active tab state are preserved
 
 ### Timestamp Conversion
 Each browser uses a different timestamp format which is automatically converted to ISO 8601 UTC format for consistency.
