@@ -30,17 +30,10 @@ func FormatJSON(w io.Writer, entries []models.HistoryEntry, browser string, star
 	return encoder.Encode(report)
 }
 
-// FormatJSONCompact writes history report as compact JSON to the given writer
-func FormatJSONCompact(w io.Writer, entries []models.HistoryEntry, browser string, startDate, endDate time.Time) error {
-	report := models.HistoryReport{
-		Browser:      browser,
-		StartDate:    startDate,
-		EndDate:      endDate,
-		TotalEntries: len(entries),
-		Entries:      entries,
-	}
-
+// FormatYouTubeWatchLaterJSON writes Watch Later playlist snapshot to the given writer.
+func FormatYouTubeWatchLaterJSON(w io.Writer, report models.YouTubeWatchLaterReport) error {
 	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
 	encoder.SetEscapeHTML(false)
 
 	return encoder.Encode(report)
@@ -165,6 +158,34 @@ func FormatTabsJSONCompact(w io.Writer, entries []models.TabEntry, browser strin
 	}
 
 	encoder := json.NewEncoder(w)
+	encoder.SetEscapeHTML(false)
+
+	return encoder.Encode(report)
+}
+
+// FormatReadingListJSON writes reading list report as JSON to the given writer
+func FormatReadingListJSON(w io.Writer, entries []models.ReadingListEntry, platform string, startDate, endDate time.Time, tz string) error {
+	var startPtr, endPtr *time.Time
+
+	// Only include dates if they are specified
+	if !startDate.IsZero() {
+		startPtr = &startDate
+	}
+	if !endDate.IsZero() {
+		endPtr = &endDate
+	}
+
+	report := models.ReadingListReport{
+		Platform:     platform,
+		StartDate:    startPtr,
+		EndDate:      endPtr,
+		Timezone:     tz,
+		TotalEntries: len(entries),
+		Entries:      entries,
+	}
+
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
 	encoder.SetEscapeHTML(false)
 
 	return encoder.Encode(report)

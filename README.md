@@ -9,6 +9,7 @@ Extract browser history and bookmarks from Chrome, Chromium, Brave, Vivaldi, Fir
 - **Multi-browser support**: Chrome, Chromium, Edge, Brave, Vivaldi, Firefox, and Safari
 - **Cross-platform**: Works on Linux, macOS, and Windows
 - **History, Bookmarks & Open Tabs**: Extract browsing history, bookmarks, and currently open tabs
+- **Reading Lists**: Extract saved articles from Medium and Substack (with hybrid file export + web scraping)
 - **Automatic detection**: Auto-detects installed browsers or specify manually
 - **Date filtering**: Extract history and bookmarks for specific dates or date ranges
 - **Timezone support**: Parse dates in your local timezone or specify any timezone
@@ -17,6 +18,7 @@ Extract browser history and bookmarks from Chrome, Chromium, Brave, Vivaldi, Fir
 - **Tags support**: Extracts Firefox bookmark tags
 - **LLM-friendly output**: JSON format optimized for consumption by language models
 - **Minimal dependencies**: Pure Go implementation with no CGO required for better cross-platform compilation
+- **Privacy-first**: Runs entirely on your machine, no data transmission (unless you explicitly pipe to external services)
 
 ## Installation
 
@@ -129,6 +131,145 @@ web-recap tabs --db-path /path/to/Sessions
 ```
 
 > **Note:** Open tabs extraction only works with Chromium-based browsers. Firefox and Safari are not yet supported. There may be a slight delay between actual browser state and what is reported, as browsers don't immediately flush session data to disk.
+
+### Extract Reading Lists (Medium, Substack)
+
+Extract saved articles from Medium reading lists and Substack saved posts.
+
+**Supports three methods:**
+1. **Public URL export** (for public Medium reading lists, no auth needed)
+2. **File export** (recommended for private lists, more reliable)
+3. **Web scraping** (requires authentication, may break with platform changes)
+
+#### Method 1: Public Medium Reading Lists
+
+For public Medium reading lists (like `https://medium.com/@username/list/reading-list`):
+
+```bash
+# Export using the browser script, then import
+# 1. Open the public reading list URL in your browser
+# 2. Open DevTools (F12) → Console
+# 3. Paste contents of scripts/export-medium-public.js
+# 4. A JSON file will be downloaded
+
+# Import the exported JSON file
+web-recap reading-list --platform medium --file medium-reading-list-2025-12-28.json
+
+# With date filtering
+web-recap reading-list --platform medium --file medium-reading-list.json --start-date 2025-01-01
+```
+
+#### Method 2: File Export (Recommended for Private Lists)
+
+Export your reading list to a file first, then parse it:
+
+```bash
+# Medium - Export to CSV or JSON first (see "Getting Export Files" below)
+web-recap reading-list --platform medium --file medium-reading-list.csv
+web-recap reading-list --platform medium --file medium-reading-list.json
+
+# Substack - Export to JSON first
+web-recap reading-list --platform substack --file substack-saves.json
+
+# With date filtering
+web-recap reading-list --platform medium --file medium.json --start-date 2025-01-01
+```
+
+#### Method 3: Web Scraping (Authentication Required)
+
+Use cookies/session tokens from your browser:
+
+```bash
+# Medium - Using cookie
+export MEDIUM_COOKIE="sid=YOUR_COOKIE_VALUE"
+web-recap reading-list --platform medium
+
+# Or pass directly
+web-recap reading-list --platform medium --cookie "sid=YOUR_VALUE"
+
+# Substack - Using session token
+export SUBSTACK_SESSION_TOKEN="YOUR_TOKEN"
+web-recap reading-list --platform substack
+
+# Or using cookie
+export SUBSTACK_COOKIE="substack.sid=VALUE; substack.lli=VALUE"
+web-recap reading-list --platform substack
+```
+
+#### All Platforms
+
+```bash
+# Query all configured platforms
+web-recap reading-list --all-platforms
+
+# With date range
+web-recap reading-list --all-platforms --start-date 2025-01-01 --end-date 2025-12-31
+
+# Save to file
+web-recap reading-list --platform medium -o reading-list.json
+```
+
+#### Getting Authentication Credentials
+
+**For Medium:**
+
+1. Open Medium and log in to your account
+2. Go to your reading list: https://medium.com/me/list/reading-list
+3. Open DevTools (F12 or Cmd+Option+I)
+4. Go to **Application** → **Cookies** → **https://medium.com**
+5. Copy the `sid` cookie value:
+   ```bash
+   export MEDIUM_COOKIE="sid=YOUR_SID_VALUE"
+   ```
+
+**For Substack:**
+
+1. Open Substack and log in
+2. Go to your inbox: https://substack.com/inbox
+3. Open DevTools (F12) → **Network** tab
+4. Refresh the page (F5)
+5. Click any API request → **Headers** tab
+6. Copy cookies from **Request Headers**:
+   ```bash
+   export SUBSTACK_COOKIE="substack.sid=VALUE; substack.lli=VALUE"
+   ```
+
+**Alternative: Copy full cookie string**
+- In Network tab, right-click any request → **Copy as cURL**
+- Extract the Cookie header from the cURL command
+
+> **Security Note:** Never commit cookies to git. Cookies expire after weeks/months. Store them in environment variables or use the `--cookie` flag.
+
+#### Getting Export Files
+
+**Medium Public Reading List Export:**
+
+For any public Medium reading list:
+1. Open the public reading list URL (e.g., `https://medium.com/@username/list/reading-list`)
+2. Open DevTools (F12) → Console
+3. Paste contents of `scripts/export-medium-public.js`
+4. Press Enter - a JSON file will download
+
+**Medium Private Reading List Export:**
+
+For your own reading list:
+1. Open https://medium.com/me/list/reading-list (must be logged in)
+2. Open DevTools (F12) → Console
+3. Paste contents of `scripts/export-medium.js`
+4. Press Enter - a CSV file will download
+
+**Substack Export:**
+
+1. Open https://substack.com/inbox → "Saved" tab
+2. Open DevTools (F12) → Console
+3. Paste contents of `scripts/export-substack.js`
+4. Press Enter - a JSON file will download
+
+See [scripts/README.md](./scripts/README.md) for detailed instructions.
+
+**Quick Start**: See [QUICK_START_READING_LISTS.md](./QUICK_START_READING_LISTS.md) for a 5-minute setup guide.
+
+**Full Documentation**: See [READING_LIST.md](./READING_LIST.md) for complete instructions.
 
 ### Extract History
 
@@ -277,6 +418,36 @@ The tool outputs open tabs in the following JSON format:
 }
 ```
 
+### Reading List Output Format
+
+The tool outputs reading lists in the following JSON format:
+
+```json
+{
+  "platform": "medium",
+  "start_date": "2025-01-01T00:00:00Z",
+  "end_date": "2025-12-31T23:59:59Z",
+  "timezone": "America/New_York",
+  "total_entries": 42,
+  "entries": [
+    {
+      "saved_at": "2025-12-15T14:30:00Z",
+      "url": "https://medium.com/@author/article-title",
+      "title": "Interesting Article Title",
+      "author": "Author Name",
+      "publication": "Publication Name",
+      "excerpt": "Article excerpt or description...",
+      "domain": "medium.com",
+      "platform": "medium",
+      "read_status": "unread"
+    },
+    ...
+  ]
+}
+```
+
+Note: `start_date`, `end_date`, and `timezone` fields are only included when date filtering is used.
+
 ## Output Fields
 
 ### History Fields
@@ -324,6 +495,24 @@ The tool outputs open tabs in the following JSON format:
   - **group**: Tab group name (if grouped, Chromium feature)
   - **window_id**: Window identifier
   - **browser**: Browser source
+
+### Reading List Fields
+
+- **platform**: Platform name (medium, substack, or "all")
+- **start_date**: Filter period start (ISO 8601 UTC format, only when date filtering is used)
+- **end_date**: Filter period end (ISO 8601 UTC format, only when date filtering is used)
+- **timezone**: Timezone used for date interpretation (only when date filtering is used)
+- **total_entries**: Number of saved articles in the report
+- **entries**: Array of reading list entries, each containing:
+  - **saved_at**: When article was saved (ISO 8601 UTC format)
+  - **url**: Full URL of the article
+  - **title**: Article title
+  - **author**: Article author (optional)
+  - **publication**: Publication name (optional)
+  - **excerpt**: Article excerpt or description (optional)
+  - **domain**: Extracted domain name
+  - **platform**: Source platform (medium, substack, etc.)
+  - **read_status**: Read status (unread, read, archived - optional)
 
 ## LLM Usage
 

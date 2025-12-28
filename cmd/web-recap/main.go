@@ -5,26 +5,46 @@ import (
 	"os"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/rzolkos/web-recap/internal/browser"
 	"github.com/rzolkos/web-recap/internal/database"
+	"github.com/rzolkos/web-recap/internal/models"
 	"github.com/rzolkos/web-recap/internal/output"
+	"github.com/rzolkos/web-recap/internal/readinglist"
+	"github.com/rzolkos/web-recap/internal/youtube"
+	"github.com/spf13/cobra"
+	"google.golang.org/api/option"
 )
 
 var (
-	browserType    string
-	date           string
-	startDate      string
-	endDate        string
-	startTime      string
-	endTime        string
-	timeHour       string
-	timezone       string
-	utcMode        bool
-	outputFile     string
-	dbPath         string
-	allBrowsers    bool
-	version        = "0.1.0-alpha"
+	browserType string
+	date        string
+	startDate   string
+	endDate     string
+	startTime   string
+	endTime     string
+	timeHour    string
+	timezone    string
+	utcMode     bool
+	outputFile  string
+	dbPath      string
+	allBrowsers bool
+	version     = "0.1.0-alpha"
+	// Reading list flags
+	platform     string
+	sessionToken string
+	cookie       string
+	username     string
+	filePath     string
+	publicURL    string
+	allPlatforms bool
+
+	// YouTube flags
+	youtubeClientSecret string
+	youtubeTokenPath    string
+	youtubeDataPath     string
+	youtubePlaylistID   string
+	youtubeChannelID    string
+	youtubeDebug        bool
 )
 
 var rootCmd = &cobra.Command{
@@ -67,6 +87,8 @@ func init() {
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(bookmarksCmd)
 	rootCmd.AddCommand(tabsCmd)
+	rootCmd.AddCommand(readingListCmd)
+	rootCmd.AddCommand(youtubeWatchLaterCmd)
 }
 
 func main() {
@@ -635,4 +657,290 @@ func runBookmarks(cmd *cobra.Command, args []string) error {
 	}
 
 	return output.FormatBookmarksJSON(out, entries, b.Name, startTimeValue, endTimeValue, timezone)
+}
+
+var youtubeWatchLaterCmd = &cobra.Command{
+	Use:   "youtube-watch-later",
+	Short: "Fetch YouTube Watch later playlist URLs",
+	Long: `Fetch your private YouTube Watch later playlist and output all video URLs.
+
+This requires OAuth2 (not just an API key). Provide the OAuth client secret JSON
+(downloaded from Google Cloud Console) via --client-secret.
+
+By default, it writes a local JSON snapshot and on subsequent runs fetches only
+new items based on the latest added_at timestamp in that file.
+
+Examples:
+  web-recap youtube-watch-later --client-secret youtube_client.json --data watch_later.json
+  web-recap youtube-watch-later --client-secret youtube_client.json --token youtube_token.json --data watch_later.json -o watch_later.json
+`,
+	RunE: runYouTubeWatchLater,
+}
+
+func init() {
+	youtubeWatchLaterCmd.Flags().StringVar(&youtubeClientSecret, "client-secret", "", "Path to Google OAuth client secret JSON")
+	youtubeWatchLaterCmd.Flags().StringVar(&youtubeTokenPath, "token", "", "Path to cached OAuth token JSON (default: <client-secret>.token.json)")
+	youtubeWatchLaterCmd.Flags().StringVar(&youtubeDataPath, "data", "watch_later.json", "Path to local Watch later data file")
+	youtubeWatchLaterCmd.Flags().StringVar(&youtubePlaylistID, "playlist-id", "WL", "Playlist ID to fetch (default: WL for Watch Later)")
+	youtubeWatchLaterCmd.Flags().StringVar(&youtubeChannelID, "channel-id", "", "Channel ID to use (debug/override; default: mine=true first channel)")
+	youtubeWatchLaterCmd.Flags().BoolVar(&youtubeDebug, "debug", false, "Print debug info about discovered channels")
+	_ = youtubeWatchLaterCmd.MarkFlagRequired("client-secret")
+}
+
+func runYouTubeWatchLater(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+
+	client, err := youtube.GetClient(ctx, youtubeClientSecret, youtubeTokenPath)
+	if err != nil {
+		return err
+	}
+
+	var existingItems []models.YouTubePlaylistItem
+	var since time.Time
+	if youtubeDataPath != "" {
+		if existing, err := youtube.LoadWatchLaterFile(youtubeDataPath); err == nil {
+			existingItems = existing.Items
+			since = youtube.MaxAddedAt(existing.Items)
+		}
+	}
+
+	playlistID, newItems, err := youtube.FetchWatchLaterItemsWithOptions(ctx, option.WithHTTPClient(client), youtubePlaylistID, youtubeChannelID, youtubeDebug, since)
+	if err != nil {
+		return err
+	}
+
+	merged := youtube.MergeByVideoID(existingItems, newItems)
+
+	report := models.YouTubeWatchLaterReport{
+		FetchedAt:   time.Now().UTC(),
+		PlaylistID:  playlistID,
+		TotalItems:  len(merged),
+		DeltaAdded:  len(newItems),
+		Items:       merged,
+		Source:      "youtube",
+		Description: "YouTube Watch later playlist snapshot",
+	}
+
+	// Always update local data file if provided.
+	if youtubeDataPath != "" {
+		if err := youtube.SaveWatchLaterFile(youtubeDataPath, report); err != nil {
+			return err
+		}
+	}
+
+	out := os.Stdout
+	if outputFile != "" {
+		f, err := os.Create(outputFile)
+		if err != nil {
+			return fmt.Errorf("failed to create output file: %v", err)
+		}
+		defer f.Close()
+		out = f
+	}
+
+	return output.FormatYouTubeWatchLaterJSON(out, report)
+}
+
+var readingListCmd = &cobra.Command{
+	Use:   "reading-list",
+	Short: "Extract reading list/saved articles from Medium, Substack, etc.",
+	Long: `Extract saved articles from platforms like Medium and Substack.
+
+Supports multiple fetching strategies:
+  1. Public URL scraping (for public Medium reading lists, no auth needed)
+  2. Web scraping (requires authentication via cookies/session tokens)
+  3. Manual file parsing (CSV for Medium, JSON for Substack)
+
+The tool tries strategies in order until one succeeds.
+
+Authentication can be provided via:
+  - Command-line flags (--cookie, --session-token, --username)
+  - Environment variables (MEDIUM_COOKIE, SUBSTACK_SESSION_TOKEN, etc.)
+  - File path for manual exports (--file)
+
+Examples:
+  # Medium public reading list (no authentication needed!)
+  web-recap reading-list --platform medium --url https://medium.com/@username/list/reading-list
+
+  # Medium reading list (web scraping with cookie)
+  export MEDIUM_COOKIE="your-cookie-string"
+  web-recap reading-list --platform medium
+
+  # Medium from CSV export
+  web-recap reading-list --platform medium --file medium-export.csv
+
+  # Substack saved posts (with session token)
+  export SUBSTACK_SESSION_TOKEN="your-token"
+  web-recap reading-list --platform substack
+
+  # Substack from JSON export
+  web-recap reading-list --platform substack --file substack-saves.json
+
+  # All platforms with date range
+  web-recap reading-list --all-platforms --start-date 2025-01-01 --end-date 2025-12-31
+
+  # Save to file
+  web-recap reading-list --platform medium -o reading-list.json
+`,
+	RunE: runReadingList,
+}
+
+func init() {
+	readingListCmd.Flags().StringVarP(&platform, "platform", "p", "medium", "Platform: medium, substack, or all")
+	readingListCmd.Flags().StringVar(&sessionToken, "session-token", "", "Session token for authentication")
+	readingListCmd.Flags().StringVar(&cookie, "cookie", "", "Cookie string for authentication")
+	readingListCmd.Flags().StringVar(&username, "username", "", "Username (for platform-specific features)")
+	readingListCmd.Flags().StringVarP(&filePath, "file", "f", "", "Path to exported file (CSV for Medium, JSON for Substack)")
+	readingListCmd.Flags().StringVar(&publicURL, "url", "", "Public reading list URL (e.g., https://medium.com/@username/list/reading-list)")
+	readingListCmd.Flags().BoolVar(&allPlatforms, "all-platforms", false, "Fetch from all configured platforms")
+}
+
+func runReadingList(cmd *cobra.Command, args []string) error {
+	// Get timezone
+	loc, err := getTimezone(timezone, utcMode)
+	if err != nil {
+		return err
+	}
+
+	// Parse dates with timezone (same logic as history/bookmarks)
+	var startTimeValue, endTimeValue time.Time
+	var err2 error
+
+	if date != "" {
+		// Single date mode
+		start, err := parseDateTimeInLocation(date, "", loc)
+		if err != nil {
+			return err
+		}
+
+		if timeHour != "" {
+			hour, err := parseHour(timeHour)
+			if err != nil {
+				return err
+			}
+			startTimeValue = time.Date(start.Year(), start.Month(), start.Day(),
+				hour, 0, 0, 0, loc)
+			endTimeValue = startTimeValue.Add(1 * time.Hour)
+		} else if startTime != "" || endTime != "" {
+			var st, et string
+			if startTime != "" {
+				st = startTime
+			} else {
+				st = "00:00"
+			}
+			if endTime != "" {
+				et = endTime
+			} else {
+				et = "23:59"
+			}
+
+			startTimeValue, err = parseDateTimeInLocation(date, st, loc)
+			if err != nil {
+				return err
+			}
+			endTimeValue, err = parseDateTimeInLocation(date, et, loc)
+			if err != nil {
+				return err
+			}
+		} else {
+			startTimeValue = start
+			endTimeValue = start.Add(24 * time.Hour)
+		}
+	} else if startDate != "" || endDate != "" {
+		// Date range mode
+		if startDate != "" {
+			startTimeValue, err2 = parseDateTimeInLocation(startDate, "", loc)
+			if err2 != nil {
+				return err2
+			}
+		}
+
+		if endDate != "" {
+			endTimeValue, err2 = parseDateTimeInLocation(endDate, "", loc)
+			if err2 != nil {
+				return err2
+			}
+			endTimeValue = endTimeValue.Add(24 * time.Hour)
+		}
+	}
+	// If no date specified, leave as zero values to return all entries
+
+	// Convert to UTC for querying
+	if !startTimeValue.IsZero() {
+		startTimeValue = startTimeValue.UTC()
+	}
+	if !endTimeValue.IsZero() {
+		endTimeValue = endTimeValue.UTC()
+	}
+
+	var entries []models.ReadingListEntry
+	var platformName string
+
+	if allPlatforms {
+		// Query all platforms
+		platforms := []readinglist.PlatformType{
+			readinglist.PlatformMedium,
+			readinglist.PlatformSubstack,
+		}
+
+		configs := make(map[readinglist.PlatformType]*readinglist.Config)
+
+		for _, p := range platforms {
+			// Load from env vars first
+			envConfig, err := readinglist.LoadConfigFromEnv(p)
+			if err != nil {
+				continue
+			}
+
+			// Create flag config
+			flagConfig := readinglist.LoadConfigFromFlags(p, sessionToken, cookie, username, filePath, publicURL)
+
+			// Merge configs (flags take precedence)
+			config := readinglist.MergeConfigs(flagConfig, envConfig)
+
+			configs[p] = config
+		}
+
+		entries, err = readinglist.QueryMultiplePlatforms(platforms, configs, startTimeValue, endTimeValue)
+		if err != nil {
+			return fmt.Errorf("failed to query reading lists: %v", err)
+		}
+
+		platformName = "all"
+	} else {
+		// Query single platform
+		platformType := readinglist.PlatformType(platform)
+
+		// Load from env vars first
+		envConfig, err := readinglist.LoadConfigFromEnv(platformType)
+		if err != nil {
+			return fmt.Errorf("unsupported platform: %s", platform)
+		}
+
+		// Create flag config
+		flagConfig := readinglist.LoadConfigFromFlags(platformType, sessionToken, cookie, username, filePath, publicURL)
+
+		// Merge configs (flags take precedence)
+		config := readinglist.MergeConfigs(flagConfig, envConfig)
+
+		entries, err = readinglist.Query(platformType, config, startTimeValue, endTimeValue)
+		if err != nil {
+			return fmt.Errorf("failed to query %s reading list: %v", platform, err)
+		}
+
+		platformName = platform
+	}
+
+	// Write output
+	out := os.Stdout
+	if outputFile != "" {
+		f, err := os.Create(outputFile)
+		if err != nil {
+			return fmt.Errorf("failed to create output file: %v", err)
+		}
+		defer f.Close()
+		out = f
+	}
+
+	return output.FormatReadingListJSON(out, entries, platformName, startTimeValue, endTimeValue, timezone)
 }

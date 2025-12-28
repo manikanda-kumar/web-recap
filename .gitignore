@@ -35,7 +35,13 @@ web-recap.exe
 # Temporary files
 *.tmp
 *.temp
+*.json
+*.txt
 
 # Build output
 bin/
 lessons.md
+
+# Markdown files (except README.md)
+*.md
+!README.md
