@@ -41,7 +41,8 @@ blogs=(
 )
 
 # Output file
-output="rss_blogs.txt"
+mkdir -p data/text
+output="data/text/rss_blogs.txt"
 > "$output"
 
 # Function to check for RSS feed
