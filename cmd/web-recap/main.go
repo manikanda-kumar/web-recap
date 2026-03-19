@@ -691,8 +691,8 @@ By default, it writes a local JSON snapshot and on subsequent runs fetches only
 new items based on the latest added_at timestamp in that file.
 
 Examples:
-  web-recap youtube-watch-later --client-secret data/youtube_client.json --data data/watch_later.json
-  web-recap youtube-watch-later --client-secret data/youtube_client.json --token data/youtube_token.json --data data/watch_later.json -o data/watch_later.json
+  web-recap youtube-watch-later --client-secret data/youtube/client.json --data data/youtube/watch_later.json
+  web-recap youtube-watch-later --client-secret data/youtube/client.json --token data/youtube/token.json --data data/youtube/watch_later.json -o data/youtube/watch_later.json
 `,
 
 	RunE: runYouTubeWatchLater,
@@ -701,7 +701,7 @@ Examples:
 func init() {
 	youtubeWatchLaterCmd.Flags().StringVar(&youtubeClientSecret, "client-secret", "", "Path to Google OAuth client secret JSON")
 	youtubeWatchLaterCmd.Flags().StringVar(&youtubeTokenPath, "token", "", "Path to cached OAuth token JSON (default: <client-secret>.token.json)")
-	youtubeWatchLaterCmd.Flags().StringVar(&youtubeDataPath, "data", "data/watch_later.json", "Path to local Watch later data file")
+	youtubeWatchLaterCmd.Flags().StringVar(&youtubeDataPath, "data", "data/youtube/watch_later.json", "Path to local Watch later data file")
 	youtubeWatchLaterCmd.Flags().StringVar(&youtubePlaylistID, "playlist-id", "WL", "Playlist ID to fetch (default: WL for Watch Later)")
 	youtubeWatchLaterCmd.Flags().StringVar(&youtubeChannelID, "channel-id", "", "Channel ID to use (debug/override; default: mine=true first channel)")
 	youtubeWatchLaterCmd.Flags().BoolVar(&youtubeDebug, "debug", false, "Print debug info about discovered channels")
@@ -765,24 +765,24 @@ func runYouTubeWatchLater(cmd *cobra.Command, args []string) error {
 var youtubeCopyPlaylistCmd = &cobra.Command{
 	Use:   "youtube-copy-playlist",
 	Short: "Copy videos from Watch Later data to a new or existing public playlist",
-	Long: `Read videos from a local data/watch_later.json file and insert them into
+	Long: `Read videos from a local data/youtube/watch_later.json file and insert them into
 a YouTube playlist. If --target-playlist is not provided, a new playlist is created.
 
 This requires OAuth2 with read-write access. On first run it will open a browser
 for authorization (a separate token from the readonly one).
 
 Examples:
-  # Create a new public playlist from data/watch_later.json
-  web-recap youtube-copy-playlist --client-secret data/youtube_client.json
+  # Create a new public playlist from data/youtube/watch_later.json
+  web-recap youtube-copy-playlist --client-secret data/youtube/client.json
 
   # Create with a custom title
-  web-recap youtube-copy-playlist --client-secret data/youtube_client.json --title "My Watch Later Archive"
+  web-recap youtube-copy-playlist --client-secret data/youtube/client.json --title "My Watch Later Archive"
 
   # Add to an existing playlist
-  web-recap youtube-copy-playlist --client-secret data/youtube_client.json --target-playlist PLxxxxxxxx
+  web-recap youtube-copy-playlist --client-secret data/youtube/client.json --target-playlist PLxxxxxxxx
 
   # Create an unlisted playlist
-  web-recap youtube-copy-playlist --client-secret data/youtube_client.json --privacy unlisted
+  web-recap youtube-copy-playlist --client-secret data/youtube/client.json --privacy unlisted
 `,
 
 	RunE: runYouTubeCopyPlaylist,
@@ -791,7 +791,7 @@ Examples:
 func init() {
 	youtubeCopyPlaylistCmd.Flags().StringVar(&youtubeClientSecret, "client-secret", "", "Path to Google OAuth client secret JSON")
 	youtubeCopyPlaylistCmd.Flags().StringVar(&youtubeTokenPath, "token", "", "Path to cached OAuth token JSON (default: <client-secret>.rw-token.json)")
-	youtubeCopyPlaylistCmd.Flags().StringVar(&copySourceData, "data", "data/watch_later.json", "Path to local Watch Later data file")
+	youtubeCopyPlaylistCmd.Flags().StringVar(&copySourceData, "data", "data/youtube/watch_later.json", "Path to local Watch Later data file")
 	youtubeCopyPlaylistCmd.Flags().StringVar(&copyTargetPlaylist, "target-playlist", "", "Existing playlist ID to add videos to (if empty, creates a new one)")
 	youtubeCopyPlaylistCmd.Flags().StringVar(&copyPlaylistTitle, "title", "Watch Later Archive", "Title for the new playlist (ignored if --target-playlist is set)")
 	youtubeCopyPlaylistCmd.Flags().StringVar(&copyPrivacyStatus, "privacy", "public", "Privacy status: public, unlisted, or private")
@@ -1079,14 +1079,14 @@ Examples:
   web-recap twitter-bookmarks --provider composio
   COMPOSIO_API_KEY=... COMPOSIO_MCP_URL=... COMPOSIO_USER_ID=... web-recap twitter-bookmarks --provider composio
   web-recap twitter-bookmarks --provider bird
-  web-recap twitter-bookmarks --data data/twitter_bookmarks.json
+  web-recap twitter-bookmarks --data data/twitter/bookmarks.json
   web-recap twitter-bookmarks -o bookmarks.json
 `,
 	RunE: runTwitterBookmarks,
 }
 
 func init() {
-	twitterBookmarksCmd.Flags().StringVar(&twitterDataPath, "data", "data/twitter_bookmarks.json", "Path to local Twitter bookmarks data file")
+	twitterBookmarksCmd.Flags().StringVar(&twitterDataPath, "data", "data/twitter/bookmarks.json", "Path to local Twitter bookmarks data file")
 	twitterBookmarksCmd.Flags().StringVar(&twitterProvider, "provider", "auto", "Provider: auto, composio, bird")
 	twitterBookmarksCmd.Flags().StringVar(&twitterAuthToken, "auth-token", "", "Twitter auth_token (from browser cookies)")
 	twitterBookmarksCmd.Flags().StringVar(&twitterCt0, "ct0", "", "Twitter ct0 token (from browser cookies)")

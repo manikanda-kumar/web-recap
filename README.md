@@ -284,25 +284,25 @@ Extract your private YouTube Watch Later playlist. This requires OAuth2 authenti
 3. Enable the **YouTube Data API v3**
 4. Go to **Credentials** → **Create Credentials** → **OAuth client ID**
 5. Select **Desktop app**, name it, and click **Create**
-6. Download the JSON file (recommended path: `data/youtube_client.json`)
+6. Download the JSON file (recommended path: `data/youtube/client.json`)
 
 #### Usage
 
 ```bash
 # First run - will open browser for OAuth authorization
-web-recap youtube-watch-later --client-secret data/youtube_client.json
+web-recap youtube-watch-later --client-secret data/youtube/client.json
 
 # Subsequent runs use cached token and fetch only new items
-web-recap youtube-watch-later --client-secret data/youtube_client.json
+web-recap youtube-watch-later --client-secret data/youtube/client.json
 
 # Save to specific output file
-web-recap youtube-watch-later --client-secret data/youtube_client.json -o data/watch_later.json
+web-recap youtube-watch-later --client-secret data/youtube/client.json -o data/youtube/watch_later.json
 
 # Specify custom data file location (for delta tracking)
-web-recap youtube-watch-later --client-secret data/youtube_client.json --data data/my_watch_later.json
+web-recap youtube-watch-later --client-secret data/youtube/client.json --data data/youtube/my_watch_later.json
 
 # Fetch any playlist by ID (not just Watch Later)
-web-recap youtube-watch-later --client-secret data/youtube_client.json --playlist-id PLxxxxxxxx
+web-recap youtube-watch-later --client-secret data/youtube/client.json --playlist-id PLxxxxxxxx
 ```
 
 #### How It Works
@@ -339,7 +339,7 @@ Option B: bird fallback
 #### Usage
 
 ```bash
-# Fetch bookmarks (saves to data/twitter_bookmarks.json by default)
+# Fetch bookmarks (saves to data/twitter/bookmarks.json by default)
 web-recap twitter-bookmarks
 
 # Force Composio provider
@@ -352,7 +352,7 @@ web-recap twitter-bookmarks --provider bird
 web-recap twitter-bookmarks -o bookmarks.json
 
 # Specify custom data file location (for delta tracking)
-web-recap twitter-bookmarks --data data/my_bookmarks.json
+web-recap twitter-bookmarks --data data/twitter/my_bookmarks.json
 ```
 
 #### How It Works

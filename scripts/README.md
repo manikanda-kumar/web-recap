@@ -56,7 +56,7 @@ For public reading lists (e.g., `https://medium.com/@username/list/reading-list`
 6. Wait for download (JSON file)
 7. Copy videos to a public playlist:
    ```bash
-   web-recap youtube-copy-playlist --client-secret data/youtube_client.json --data data/watch-later-2025-12-28.json
+   web-recap youtube-copy-playlist --client-secret data/youtube/client.json --data data/youtube/watch-later-2025-12-28.json
    ```
 
 ## Files

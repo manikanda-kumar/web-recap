@@ -10,8 +10,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.request import urlopen, Request
 from urllib.error import HTTPError, URLError
 
-INPUT_CSV = os.path.join(os.path.dirname(__file__), "..", "data", "watch_later_videos.csv")
-OUTPUT_JSON = os.path.join(os.path.dirname(__file__), "..", "data", "watch_later_details.json")
+INPUT_CSV = os.path.join(os.path.dirname(__file__), "..", "data", "youtube", "watch_later_videos.csv")
+OUTPUT_JSON = os.path.join(os.path.dirname(__file__), "..", "data", "youtube", "watch_later_details.json")
 PROGRESS_FILE = os.path.join(os.path.dirname(__file__), "..", "tmp", "yt_fetch_progress.json")
 MAX_WORKERS = 20
 OEMBED_URL = "https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={vid}&format=json"

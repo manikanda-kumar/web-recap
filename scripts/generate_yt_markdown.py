@@ -7,8 +7,8 @@ import os
 from collections import Counter, defaultdict
 from datetime import datetime
 
-INPUT = os.path.join(os.path.dirname(__file__), "..", "data", "watch_later_details.json")
-OUTPUT = os.path.join(os.path.dirname(__file__), "..", "data", "watch_later_catalog.md")
+INPUT = os.path.join(os.path.dirname(__file__), "..", "data", "youtube", "watch_later_details.json")
+OUTPUT = os.path.join(os.path.dirname(__file__), "..", "data", "youtube", "watch_later_catalog.md")
 
 
 def detect_lang(title):

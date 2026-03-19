@@ -10,7 +10,7 @@
  * 6. A JSON file will be downloaded automatically
  *
  * Then use with web-recap:
- *   web-recap youtube-copy-playlist --client-secret data/youtube_client.json --data data/watch_later_full.json
+ *   web-recap youtube-copy-playlist --client-secret data/youtube/client.json --data data/youtube/watch_later_full.json
  */
 
 (async function exportYouTubeWatchLater() {
