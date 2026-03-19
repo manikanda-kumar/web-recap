@@ -26,6 +26,18 @@ type tokenFile struct {
 // LoadOAuthConfig reads a Google OAuth client JSON (downloaded from Cloud Console)
 // and returns an oauth2.Config for YouTube readonly access.
 func LoadOAuthConfig(clientSecretPath string) (*oauth2.Config, error) {
+	return LoadOAuthConfigWithScopes(clientSecretPath, "https://www.googleapis.com/auth/youtube.readonly")
+}
+
+// LoadOAuthConfigReadWrite reads a Google OAuth client JSON and returns an
+// oauth2.Config with full YouTube read-write access.
+func LoadOAuthConfigReadWrite(clientSecretPath string) (*oauth2.Config, error) {
+	return LoadOAuthConfigWithScopes(clientSecretPath, "https://www.googleapis.com/auth/youtube")
+}
+
+// LoadOAuthConfigWithScopes reads a Google OAuth client JSON and returns an
+// oauth2.Config for the given scopes.
+func LoadOAuthConfigWithScopes(clientSecretPath string, scopes ...string) (*oauth2.Config, error) {
 	f, err := os.Open(clientSecretPath)
 	if err != nil {
 		return nil, fmt.Errorf("open client secret json: %w", err)
@@ -37,12 +49,42 @@ func LoadOAuthConfig(clientSecretPath string) (*oauth2.Config, error) {
 		return nil, fmt.Errorf("read client secret json: %w", err)
 	}
 
-	config, err := google.ConfigFromJSON(b, "https://www.googleapis.com/auth/youtube.readonly")
+	config, err := google.ConfigFromJSON(b, scopes...)
 	if err != nil {
 		return nil, fmt.Errorf("parse oauth client json: %w", err)
 	}
 
 	return config, nil
+}
+
+// GetClientReadWrite returns an authenticated HTTP client with full YouTube
+// read-write access. It caches the token in tokenPath.
+//
+// If tokenPath is empty, it defaults to <clientSecretPath>.rw-token.json.
+func GetClientReadWrite(ctx context.Context, clientSecretPath, tokenPath string) (*http.Client, error) {
+	config, err := LoadOAuthConfigReadWrite(clientSecretPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if tokenPath == "" {
+		tokenPath = clientSecretPath + ".rw-token.json"
+	}
+
+	if tok, err := readToken(tokenPath); err == nil {
+		return config.Client(ctx, tok), nil
+	}
+
+	tok, err := authorizeViaLocalhost(ctx, config)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := writeToken(tokenPath, tok); err != nil {
+		return nil, err
+	}
+
+	return config.Client(ctx, tok), nil
 }
 
 // GetClient returns an authenticated HTTP client. It caches the oauth token in tokenPath.
@@ -100,7 +142,7 @@ func writeToken(tokenPath string, tok *oauth2.Token) error {
 		}
 	}
 
-	f, err := os.Create(tokenPath)
+	f, err := os.OpenFile(tokenPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return fmt.Errorf("create token file: %w", err)
 	}

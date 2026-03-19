@@ -10,6 +10,8 @@ Extract browser history and bookmarks from Chrome, Chromium, Brave, Vivaldi, Fir
 - **Cross-platform**: Works on Linux, macOS, and Windows
 - **History, Bookmarks & Open Tabs**: Extract browsing history, bookmarks, and currently open tabs
 - **Reading Lists**: Extract saved articles from Medium and Substack (with hybrid file export + web scraping)
+- **YouTube Watch Later**: Extract your YouTube Watch Later playlist (requires OAuth2)
+- **Twitter/X Bookmarks**: Extract your Twitter/X bookmarks using Composio (preferred) or bird CLI fallback
 - **Automatic detection**: Auto-detects installed browsers or specify manually
 - **Date filtering**: Extract history and bookmarks for specific dates or date ranges
 - **Timezone support**: Parse dates in your local timezone or specify any timezone
@@ -271,6 +273,95 @@ See [scripts/README.md](./scripts/README.md) for detailed instructions.
 
 **Full Documentation**: See [READING_LIST.md](./READING_LIST.md) for complete instructions.
 
+### Extract YouTube Watch Later
+
+Extract your private YouTube Watch Later playlist. This requires OAuth2 authentication.
+
+#### Setup (One-time)
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project (or use existing)
+3. Enable the **YouTube Data API v3**
+4. Go to **Credentials** → **Create Credentials** → **OAuth client ID**
+5. Select **Desktop app**, name it, and click **Create**
+6. Download the JSON file (recommended path: `data/youtube_client.json`)
+
+#### Usage
+
+```bash
+# First run - will open browser for OAuth authorization
+web-recap youtube-watch-later --client-secret data/youtube_client.json
+
+# Subsequent runs use cached token and fetch only new items
+web-recap youtube-watch-later --client-secret data/youtube_client.json
+
+# Save to specific output file
+web-recap youtube-watch-later --client-secret data/youtube_client.json -o data/watch_later.json
+
+# Specify custom data file location (for delta tracking)
+web-recap youtube-watch-later --client-secret data/youtube_client.json --data data/my_watch_later.json
+
+# Fetch any playlist by ID (not just Watch Later)
+web-recap youtube-watch-later --client-secret data/youtube_client.json --playlist-id PLxxxxxxxx
+```
+
+#### How It Works
+
+- On first run, opens browser for Google OAuth consent
+- Saves OAuth token locally (default: `<client-secret>.token.json`)
+- Maintains a local data file for delta sync (only fetches new items)
+- Outputs video URLs, titles, channels, and timestamps
+
+### Extract Twitter/X Bookmarks
+
+Extract your Twitter/X bookmarks using **Composio** (preferred) or [bird CLI](https://github.com/steipete/bird) fallback.
+
+#### Setup (One-time)
+
+Option A: Composio (recommended)
+
+1. Create a Composio account and connect Twitter/X
+2. Get your API key and Tool Router MCP URL from Composio
+3. Set environment variables:
+
+```bash
+export COMPOSIO_API_KEY="..."
+export COMPOSIO_MCP_URL="https://..."
+export COMPOSIO_USER_ID="your-user-id"
+```
+
+Option B: bird fallback
+
+1. Install bird CLI from https://github.com/steipete/bird
+2. Bird uses cookie-based authentication from your browser (Safari, Chrome, or Firefox)
+3. Make sure you're logged into Twitter/X in your browser
+
+#### Usage
+
+```bash
+# Fetch bookmarks (saves to data/twitter_bookmarks.json by default)
+web-recap twitter-bookmarks
+
+# Force Composio provider
+web-recap twitter-bookmarks --provider composio
+
+# Force bird provider
+web-recap twitter-bookmarks --provider bird
+
+# Save to specific output file
+web-recap twitter-bookmarks -o bookmarks.json
+
+# Specify custom data file location (for delta tracking)
+web-recap twitter-bookmarks --data data/my_bookmarks.json
+```
+
+#### How It Works
+
+- Uses Composio MCP `TWITTER_BOOKMARKS_BY_USER` when configured
+- Falls back to bird CLI in `--provider auto` mode if Composio is unavailable
+- Maintains a local data file for delta sync (only fetches new items)
+- Outputs tweet URLs, text, authors, and timestamps
+
 ### Extract History
 
 ```bash
@@ -448,6 +539,36 @@ The tool outputs reading lists in the following JSON format:
 
 Note: `start_date`, `end_date`, and `timezone` fields are only included when date filtering is used.
 
+### Twitter Bookmarks Output Format
+
+The tool outputs Twitter bookmarks in the following JSON format:
+
+```json
+{
+  "fetched_at": "2025-12-28T10:30:00Z",
+  "total_items": 25,
+  "delta_added": 5,
+  "items": [
+    {
+      "tweet_id": "1234567890123456789",
+      "url": "https://x.com/username/status/1234567890123456789",
+      "text": "This is the tweet content...",
+      "author_name": "Display Name",
+      "author_handle": "username",
+      "created_at": "2025-12-15T14:30:00Z",
+      "saved_at": "2025-12-15T14:30:00Z",
+      "expanded_urls": {
+        "https://t.co/abc123": "https://github.com/user/repo",
+        "https://t.co/xyz789": "https://example.com/article"
+      }
+    },
+    ...
+  ],
+  "source": "twitter",
+  "description": "Twitter/X bookmarks snapshot"
+}
+```
+
 ## Output Fields
 
 ### History Fields
@@ -513,6 +634,23 @@ Note: `start_date`, `end_date`, and `timezone` fields are only included when dat
   - **domain**: Extracted domain name
   - **platform**: Source platform (medium, substack, etc.)
   - **read_status**: Read status (unread, read, archived - optional)
+
+### Twitter Bookmarks Fields
+
+- **fetched_at**: When the bookmarks were fetched (ISO 8601 UTC format)
+- **total_items**: Total number of bookmarks in the report
+- **delta_added**: Number of new bookmarks added since last fetch
+- **source**: Always "twitter"
+- **description**: Human-readable description
+- **items**: Array of bookmark entries, each containing:
+  - **tweet_id**: Unique tweet identifier
+  - **url**: Full URL to the tweet
+  - **text**: Tweet content
+  - **author_name**: Author's display name
+  - **author_handle**: Author's Twitter handle (without @)
+  - **created_at**: When the tweet was created (ISO 8601 UTC format)
+  - **saved_at**: Approximate time when bookmarked (ISO 8601 UTC format)
+  - **expanded_urls**: Map of t.co shortened URLs to their expanded destinations (optional)
 
 ## LLM Usage
 
@@ -751,3 +889,8 @@ MIT License - see LICENSE file for details
 ## SKILL.md
 
 See [SKILL.md](./SKILL.md) for integration instructions with Claude and other LLMs.
+LMs.
+tions with Claude and other LLMs.
+r LLMs.
+LMs.
+tions with Claude and other LLMs.

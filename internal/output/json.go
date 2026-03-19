@@ -190,3 +190,12 @@ func FormatReadingListJSON(w io.Writer, entries []models.ReadingListEntry, platf
 
 	return encoder.Encode(report)
 }
+
+// FormatTwitterBookmarksJSON writes Twitter bookmarks report to the given writer.
+func FormatTwitterBookmarksJSON(w io.Writer, report models.TwitterBookmarksReport) error {
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
+	encoder.SetEscapeHTML(false)
+
+	return encoder.Encode(report)
+}

@@ -1,10 +1,13 @@
 package youtube
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/rzolkos/web-recap/internal/models"
@@ -29,7 +32,64 @@ func SaveWatchLaterFile(path string, report models.YouTubeWatchLaterReport) erro
 	if err != nil {
 		return fmt.Errorf("marshal watch later report: %w", err)
 	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil && filepath.Dir(path) != "." {
+		return fmt.Errorf("create watch later dir: %w", err)
+	}
 	return os.WriteFile(path, b, 0o644)
+}
+
+// LoadTakeoutCSV reads a Google Takeout "Watch later videos.csv" file and
+// returns items in the same format as the JSON report.
+func LoadTakeoutCSV(path string) (*models.YouTubeWatchLaterReport, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	reader := csv.NewReader(f)
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("parse takeout csv: %w", err)
+	}
+
+	var items []models.YouTubePlaylistItem
+	for i, row := range records {
+		if i == 0 {
+			continue // skip header
+		}
+		if len(row) < 2 {
+			continue
+		}
+
+		videoID := strings.TrimSpace(row[0])
+		if videoID == "" {
+			continue
+		}
+
+		addedAt, err := time.Parse(time.RFC3339, strings.TrimSpace(row[1]))
+		if err != nil {
+			addedAt = time.Time{}
+		}
+
+		items = append(items, models.YouTubePlaylistItem{
+			VideoID: videoID,
+			URL:     "https://www.youtube.com/watch?v=" + videoID,
+			AddedAt: addedAt.UTC(),
+		})
+	}
+
+	sort.Slice(items, func(i, j int) bool { return items[i].AddedAt.Before(items[j].AddedAt) })
+
+	return &models.YouTubeWatchLaterReport{
+		FetchedAt:   time.Now().UTC(),
+		PlaylistID:  "WL",
+		TotalItems:  len(items),
+		DeltaAdded:  len(items),
+		Items:       items,
+		Source:      "youtube",
+		Description: "YouTube Watch Later (Google Takeout import)",
+	}, nil
 }
 
 func MaxAddedAt(items []models.YouTubePlaylistItem) time.Time {

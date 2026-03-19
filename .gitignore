@@ -38,6 +38,15 @@ web-recap.exe
 *.json
 *.txt
 
+# Local data / scratch space
+.data/
+.tmp.driveupload/
+.tmp.drivedownload/
+data/*
+tmp/*
+!data/.gitkeep
+!tmp/.gitkeep
+
 # Build output
 bin/
 lessons.md
@@ -45,3 +54,5 @@ lessons.md
 # Markdown files (except README.md)
 *.md
 !README.md
+!data/.gitkeep
+!tmp/.gitkeep

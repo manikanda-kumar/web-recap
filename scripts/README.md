@@ -46,11 +46,25 @@ For public reading lists (e.g., `https://medium.com/@username/list/reading-list`
    web-recap reading-list --platform substack --file substack-saves-2025-12-27.json
    ```
 
+### YouTube Watch Later Export
+
+1. Open https://www.youtube.com/playlist?list=WL
+2. Open DevTools (F12)
+3. Go to Console tab
+4. Copy/paste contents of `export-youtube-watch-later.js`
+5. Press Enter
+6. Wait for download (JSON file)
+7. Copy videos to a public playlist:
+   ```bash
+   web-recap youtube-copy-playlist --client-secret data/youtube_client.json --data data/watch-later-2025-12-28.json
+   ```
+
 ## Files
 
 - **export-medium.js** - Exports your own Medium reading list to CSV
 - **export-medium-public.js** - Exports any public Medium reading list to JSON
 - **export-substack.js** - Exports Substack saved posts to JSON
+- **export-youtube-watch-later.js** - Exports YouTube Watch Later playlist to JSON
 - **README.md** - This file
 
 ## How It Works

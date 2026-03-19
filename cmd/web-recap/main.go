@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/rzolkos/web-recap/internal/browser"
@@ -10,6 +11,7 @@ import (
 	"github.com/rzolkos/web-recap/internal/models"
 	"github.com/rzolkos/web-recap/internal/output"
 	"github.com/rzolkos/web-recap/internal/readinglist"
+	"github.com/rzolkos/web-recap/internal/twitter"
 	"github.com/rzolkos/web-recap/internal/youtube"
 	"github.com/spf13/cobra"
 	"google.golang.org/api/option"
@@ -45,6 +47,22 @@ var (
 	youtubePlaylistID   string
 	youtubeChannelID    string
 	youtubeDebug        bool
+
+	// YouTube copy-playlist flags
+	copySourceData     string
+	copyTargetPlaylist string
+	copyPlaylistTitle  string
+	copyPrivacyStatus  string
+
+	// Twitter flags
+	twitterDataPath     string
+	twitterAuthToken    string
+	twitterCt0          string
+	twitterProvider     string
+	composioAPIKey      string
+	composioMCPURL      string
+	composioUserID      string
+	composioTwitterTool string
 )
 
 var rootCmd = &cobra.Command{
@@ -89,6 +107,8 @@ func init() {
 	rootCmd.AddCommand(tabsCmd)
 	rootCmd.AddCommand(readingListCmd)
 	rootCmd.AddCommand(youtubeWatchLaterCmd)
+	rootCmd.AddCommand(youtubeCopyPlaylistCmd)
+	rootCmd.AddCommand(twitterBookmarksCmd)
 }
 
 func main() {
@@ -671,16 +691,17 @@ By default, it writes a local JSON snapshot and on subsequent runs fetches only
 new items based on the latest added_at timestamp in that file.
 
 Examples:
-  web-recap youtube-watch-later --client-secret youtube_client.json --data watch_later.json
-  web-recap youtube-watch-later --client-secret youtube_client.json --token youtube_token.json --data watch_later.json -o watch_later.json
+  web-recap youtube-watch-later --client-secret data/youtube_client.json --data data/watch_later.json
+  web-recap youtube-watch-later --client-secret data/youtube_client.json --token data/youtube_token.json --data data/watch_later.json -o data/watch_later.json
 `,
+
 	RunE: runYouTubeWatchLater,
 }
 
 func init() {
 	youtubeWatchLaterCmd.Flags().StringVar(&youtubeClientSecret, "client-secret", "", "Path to Google OAuth client secret JSON")
 	youtubeWatchLaterCmd.Flags().StringVar(&youtubeTokenPath, "token", "", "Path to cached OAuth token JSON (default: <client-secret>.token.json)")
-	youtubeWatchLaterCmd.Flags().StringVar(&youtubeDataPath, "data", "watch_later.json", "Path to local Watch later data file")
+	youtubeWatchLaterCmd.Flags().StringVar(&youtubeDataPath, "data", "data/watch_later.json", "Path to local Watch later data file")
 	youtubeWatchLaterCmd.Flags().StringVar(&youtubePlaylistID, "playlist-id", "WL", "Playlist ID to fetch (default: WL for Watch Later)")
 	youtubeWatchLaterCmd.Flags().StringVar(&youtubeChannelID, "channel-id", "", "Channel ID to use (debug/override; default: mine=true first channel)")
 	youtubeWatchLaterCmd.Flags().BoolVar(&youtubeDebug, "debug", false, "Print debug info about discovered channels")
@@ -739,6 +760,99 @@ func runYouTubeWatchLater(cmd *cobra.Command, args []string) error {
 	}
 
 	return output.FormatYouTubeWatchLaterJSON(out, report)
+}
+
+var youtubeCopyPlaylistCmd = &cobra.Command{
+	Use:   "youtube-copy-playlist",
+	Short: "Copy videos from Watch Later data to a new or existing public playlist",
+	Long: `Read videos from a local data/watch_later.json file and insert them into
+a YouTube playlist. If --target-playlist is not provided, a new playlist is created.
+
+This requires OAuth2 with read-write access. On first run it will open a browser
+for authorization (a separate token from the readonly one).
+
+Examples:
+  # Create a new public playlist from data/watch_later.json
+  web-recap youtube-copy-playlist --client-secret data/youtube_client.json
+
+  # Create with a custom title
+  web-recap youtube-copy-playlist --client-secret data/youtube_client.json --title "My Watch Later Archive"
+
+  # Add to an existing playlist
+  web-recap youtube-copy-playlist --client-secret data/youtube_client.json --target-playlist PLxxxxxxxx
+
+  # Create an unlisted playlist
+  web-recap youtube-copy-playlist --client-secret data/youtube_client.json --privacy unlisted
+`,
+
+	RunE: runYouTubeCopyPlaylist,
+}
+
+func init() {
+	youtubeCopyPlaylistCmd.Flags().StringVar(&youtubeClientSecret, "client-secret", "", "Path to Google OAuth client secret JSON")
+	youtubeCopyPlaylistCmd.Flags().StringVar(&youtubeTokenPath, "token", "", "Path to cached OAuth token JSON (default: <client-secret>.rw-token.json)")
+	youtubeCopyPlaylistCmd.Flags().StringVar(&copySourceData, "data", "data/watch_later.json", "Path to local Watch Later data file")
+	youtubeCopyPlaylistCmd.Flags().StringVar(&copyTargetPlaylist, "target-playlist", "", "Existing playlist ID to add videos to (if empty, creates a new one)")
+	youtubeCopyPlaylistCmd.Flags().StringVar(&copyPlaylistTitle, "title", "Watch Later Archive", "Title for the new playlist (ignored if --target-playlist is set)")
+	youtubeCopyPlaylistCmd.Flags().StringVar(&copyPrivacyStatus, "privacy", "public", "Privacy status: public, unlisted, or private")
+	_ = youtubeCopyPlaylistCmd.MarkFlagRequired("client-secret")
+}
+
+func runYouTubeCopyPlaylist(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+
+	// Load videos from data file (auto-detect CSV vs JSON)
+	var report *models.YouTubeWatchLaterReport
+	var err error
+	if strings.HasSuffix(strings.ToLower(copySourceData), ".csv") {
+		report, err = youtube.LoadTakeoutCSV(copySourceData)
+	} else {
+		report, err = youtube.LoadWatchLaterFile(copySourceData)
+	}
+	if err != nil {
+		return fmt.Errorf("load data file %s: %w", copySourceData, err)
+	}
+
+	if len(report.Items) == 0 {
+		fmt.Println("No videos found in data file.")
+		return nil
+	}
+
+	fmt.Printf("Found %d videos in %s\n", len(report.Items), copySourceData)
+
+	// Get read-write OAuth client
+	client, err := youtube.GetClientReadWrite(ctx, youtubeClientSecret, youtubeTokenPath)
+	if err != nil {
+		return err
+	}
+
+	targetID := copyTargetPlaylist
+
+	// Create new playlist if no target specified
+	if targetID == "" {
+		fmt.Printf("Creating new %s playlist: %q\n", copyPrivacyStatus, copyPlaylistTitle)
+		targetID, err = youtube.CreatePlaylist(ctx, option.WithHTTPClient(client), copyPlaylistTitle, "Archived from Watch Later", copyPrivacyStatus)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Created playlist: https://www.youtube.com/playlist?list=%s\n", targetID)
+	}
+
+	// Insert videos
+	fmt.Printf("Inserting %d videos into playlist %s...\n", len(report.Items), targetID)
+
+	videoIDs := make([]string, len(report.Items))
+	for i, item := range report.Items {
+		videoIDs[i] = item.VideoID
+	}
+
+	inserted, err := youtube.InsertVideosIntoPlaylist(ctx, option.WithHTTPClient(client), targetID, videoIDs)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Done! Inserted %d/%d videos.\n", inserted, len(videoIDs))
+	return nil
 }
 
 var readingListCmd = &cobra.Command{
@@ -943,4 +1057,104 @@ func runReadingList(cmd *cobra.Command, args []string) error {
 	}
 
 	return output.FormatReadingListJSON(out, entries, platformName, startTimeValue, endTimeValue, timezone)
+}
+
+var twitterBookmarksCmd = &cobra.Command{
+	Use:   "twitter-bookmarks",
+	Short: "Fetch Twitter/X bookmarks using Composio or bird",
+	Long: `Fetch your Twitter/X bookmarks using Composio (preferred) or bird CLI.
+
+Provider behavior:
+  - auto (default): uses Composio when configured, otherwise falls back to bird
+  - composio: requires COMPOSIO_API_KEY, COMPOSIO_MCP_URL, COMPOSIO_USER_ID
+  - bird: requires bird CLI installed and browser cookies/session
+
+Install bird from: https://github.com/steipete/bird
+
+By default, it writes a local JSON snapshot and on subsequent runs fetches only
+new items based on the latest saved_at timestamp in that file.
+
+Examples:
+  web-recap twitter-bookmarks
+  web-recap twitter-bookmarks --provider composio
+  COMPOSIO_API_KEY=... COMPOSIO_MCP_URL=... COMPOSIO_USER_ID=... web-recap twitter-bookmarks --provider composio
+  web-recap twitter-bookmarks --provider bird
+  web-recap twitter-bookmarks --data data/twitter_bookmarks.json
+  web-recap twitter-bookmarks -o bookmarks.json
+`,
+	RunE: runTwitterBookmarks,
+}
+
+func init() {
+	twitterBookmarksCmd.Flags().StringVar(&twitterDataPath, "data", "data/twitter_bookmarks.json", "Path to local Twitter bookmarks data file")
+	twitterBookmarksCmd.Flags().StringVar(&twitterProvider, "provider", "auto", "Provider: auto, composio, bird")
+	twitterBookmarksCmd.Flags().StringVar(&twitterAuthToken, "auth-token", "", "Twitter auth_token (from browser cookies)")
+	twitterBookmarksCmd.Flags().StringVar(&twitterCt0, "ct0", "", "Twitter ct0 token (from browser cookies)")
+	twitterBookmarksCmd.Flags().StringVar(&composioAPIKey, "composio-api-key", "", "Composio API key (default: COMPOSIO_API_KEY)")
+	twitterBookmarksCmd.Flags().StringVar(&composioMCPURL, "composio-mcp-url", "", "Composio MCP URL (default: COMPOSIO_MCP_URL)")
+	twitterBookmarksCmd.Flags().StringVar(&composioUserID, "composio-user-id", "", "Composio user ID (default: COMPOSIO_USER_ID)")
+	twitterBookmarksCmd.Flags().StringVar(&composioTwitterTool, "composio-tool", "", "Composio tool slug override (default: TWITTER_BOOKMARKS_BY_USER)")
+}
+
+func runTwitterBookmarks(cmd *cobra.Command, args []string) error {
+	if composioAPIKey == "" {
+		composioAPIKey = os.Getenv("COMPOSIO_API_KEY")
+	}
+	if composioMCPURL == "" {
+		composioMCPURL = os.Getenv("COMPOSIO_MCP_URL")
+	}
+	if composioUserID == "" {
+		composioUserID = os.Getenv("COMPOSIO_USER_ID")
+	}
+
+	var existingItems []models.TwitterBookmark
+	var since time.Time
+	if twitterDataPath != "" {
+		if existing, err := twitter.LoadBookmarksFile(twitterDataPath); err == nil {
+			existingItems = existing.Items
+			since = twitter.MaxSavedAt(existing.Items)
+		}
+	}
+
+	composioConfig := twitter.ComposioConfig{
+		APIKey: composioAPIKey,
+		MCPURL: composioMCPURL,
+		UserID: composioUserID,
+		Tool:   composioTwitterTool,
+	}
+
+	newItems, err := twitter.FetchBookmarks(since, twitter.FetchProvider(twitterProvider), twitterAuthToken, twitterCt0, composioConfig)
+	if err != nil {
+		return err
+	}
+
+	merged := twitter.MergeByTweetID(existingItems, newItems)
+
+	report := models.TwitterBookmarksReport{
+		FetchedAt:   time.Now().UTC(),
+		TotalItems:  len(merged),
+		DeltaAdded:  len(newItems),
+		Items:       merged,
+		Source:      "twitter",
+		Description: "Twitter/X bookmarks snapshot",
+	}
+
+	// Always update local data file if provided.
+	if twitterDataPath != "" {
+		if err := twitter.SaveBookmarksFile(twitterDataPath, report); err != nil {
+			return err
+		}
+	}
+
+	out := os.Stdout
+	if outputFile != "" {
+		f, err := os.Create(outputFile)
+		if err != nil {
+			return fmt.Errorf("failed to create output file: %v", err)
+		}
+		defer f.Close()
+		out = f
+	}
+
+	return output.FormatTwitterBookmarksJSON(out, report)
 }
