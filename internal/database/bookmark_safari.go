@@ -1,6 +1,7 @@
 package database
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -44,6 +45,10 @@ func (h *SafariBookmarkHandler) GetBookmarks(startTime, endTime time.Time) ([]mo
 	h.startTime = startTime
 	h.endTime = endTime
 
+	if !startTime.IsZero() || !endTime.IsZero() {
+		return nil, fmt.Errorf("safari bookmarks do not provide date_added metadata; date filtering is not supported")
+	}
+
 	data, err := os.ReadFile(h.plistPath)
 	if err != nil {
 		return nil, err
@@ -72,31 +77,20 @@ func (h *SafariBookmarkHandler) extractFromNode(node safariBookmarkNode, folderP
 	case "WebBookmarkTypeLeaf":
 		// This is a bookmark
 		if node.URLString != "" {
-			// Try to get date from URIDictionary
-			var dateAdded time.Time
+			// Safari bookmark plist doesn't expose stable date_added metadata for regular bookmarks.
+			// Keep timestamp unset instead of emitting a fabricated zero or incorrect value.
 			if node.URIDictionary != nil {
 				if title, ok := node.URIDictionary["title"].(string); ok && title != "" && node.Title == "" {
 					node.Title = title
 				}
 			}
 
-			// Filter by date if time range is specified and date is available
-			if !dateAdded.IsZero() {
-				if !h.startTime.IsZero() && dateAdded.Before(h.startTime) {
-					return bookmarks
-				}
-				if !h.endTime.IsZero() && dateAdded.After(h.endTime) {
-					return bookmarks
-				}
-			}
-
 			bookmarks = append(bookmarks, models.BookmarkEntry{
-				DateAdded: dateAdded,
-				URL:       node.URLString,
-				Title:     node.Title,
-				Folder:    folderPath,
-				Domain:    ExtractDomain(node.URLString),
-				Browser:   "safari",
+				URL:     node.URLString,
+				Title:   node.Title,
+				Folder:  folderPath,
+				Domain:  ExtractDomain(node.URLString),
+				Browser: "safari",
 			})
 		}
 

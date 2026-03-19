@@ -18,7 +18,23 @@ func ConvertChromeTimestamp(chromeTime int64) time.Time {
 	}
 
 	unixSeconds := (chromeTime / 1000000) - chromeEpochDiff
-	return time.Unix(unixSeconds, 0).UTC()
+	unixNanos := (chromeTime % 1000000) * 1000
+	return time.Unix(unixSeconds, unixNanos).UTC()
+}
+
+// WithinHalfOpenRange reports whether t is within [start, end).
+// A zero start or end means the bound is unbounded.
+func WithinHalfOpenRange(t, start, end time.Time) bool {
+	if t.IsZero() {
+		return false
+	}
+	if !start.IsZero() && t.Before(start) {
+		return false
+	}
+	if !end.IsZero() && !t.Before(end) {
+		return false
+	}
+	return true
 }
 
 // ConvertFirefoxTimestamp converts Firefox's timestamp format (microseconds since epoch) to Unix time

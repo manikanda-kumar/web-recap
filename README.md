@@ -95,7 +95,7 @@ web-recap bookmarks --all-browsers
 web-recap bookmarks -o bookmarks.json
 
 # Custom bookmark path
-web-recap bookmarks --db-path /path/to/Bookmarks
+web-recap bookmarks --browser chrome --db-path /path/to/Bookmarks
 
 # Filter by date - bookmarks added on specific date
 web-recap bookmarks --date 2025-12-15
@@ -427,6 +427,9 @@ web-recap bookmarks --start-date 2025-12-09 --end-date 2025-12-16 | grep -i clau
 
 # Extract all bookmarks from Firefox added in December 2025
 web-recap bookmarks --browser firefox --start-date 2025-12-01 --end-date 2025-12-31
+
+# Safari bookmarks do not currently support date filtering
+web-recap bookmarks --browser safari
 ```
 
 ## JSON Output Formats
@@ -594,7 +597,7 @@ The tool outputs Twitter bookmarks in the following JSON format:
 - **timezone**: Timezone used for date interpretation (only when date filtering is used)
 - **total_entries**: Number of bookmark entries in the report
 - **entries**: Array of bookmark entries, each containing:
-  - **date_added**: When bookmark was created (ISO 8601 UTC format)
+  - **date_added**: When bookmark was created (ISO 8601 UTC format, optional when source doesn't provide it)
   - **date_modified**: When bookmark was last modified (ISO 8601 UTC format, optional)
   - **url**: Full URL of the bookmark
   - **title**: Bookmark title

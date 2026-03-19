@@ -7,8 +7,8 @@ import (
 
 func TestConvertChromeTimestamp(t *testing.T) {
 	tests := []struct {
-		name      string
-		chromeVal int64
+		name       string
+		chromeVal  int64
 		expectZero bool
 	}{
 		{
@@ -38,9 +38,17 @@ func TestConvertChromeTimestamp(t *testing.T) {
 	}
 }
 
+func TestConvertChromeTimestampPreservesMicroseconds(t *testing.T) {
+	// 13289816330000001 => 1 microsecond past an exact second.
+	result := ConvertChromeTimestamp(13289816330000001)
+	if result.Nanosecond() != 1000 {
+		t.Fatalf("expected 1000ns remainder, got %dns", result.Nanosecond())
+	}
+}
+
 func TestConvertFirefoxTimestamp(t *testing.T) {
 	tests := []struct {
-		name      string
+		name       string
 		firefoxVal int64
 		expectZero bool
 	}{
@@ -161,10 +169,10 @@ func TestFilterByDateRange(t *testing.T) {
 	endDate := time.Date(2025, 12, 16, 0, 0, 0, 0, time.UTC)
 
 	tests := []struct {
-		name       string
-		startDate  time.Time
-		endDate    time.Time
-		inputLen   int
+		name         string
+		startDate    time.Time
+		endDate      time.Time
+		inputLen     int
 		minOutputLen int
 	}{
 		{
@@ -195,6 +203,31 @@ func TestFilterByDateRange(t *testing.T) {
 
 			if len(result) < tt.minOutputLen {
 				t.Errorf("expected at least %d entries, got %d", tt.minOutputLen, len(result))
+			}
+		})
+	}
+}
+
+func TestWithinHalfOpenRange(t *testing.T) {
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := start.Add(24 * time.Hour)
+
+	tests := []struct {
+		name  string
+		value time.Time
+		ok    bool
+	}{
+		{name: "inside range", value: start.Add(12 * time.Hour), ok: true},
+		{name: "equal to start", value: start, ok: true},
+		{name: "equal to end excluded", value: end, ok: false},
+		{name: "before start", value: start.Add(-time.Second), ok: false},
+		{name: "zero time", value: time.Time{}, ok: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := WithinHalfOpenRange(tt.value, start, end); got != tt.ok {
+				t.Fatalf("WithinHalfOpenRange() = %v, want %v", got, tt.ok)
 			}
 		})
 	}

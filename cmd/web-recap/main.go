@@ -540,7 +540,7 @@ func runBookmarks(cmd *cobra.Command, args []string) error {
 			if endTime != "" {
 				et = endTime
 			} else {
-				et = "23:59"
+				et = "00:00"
 			}
 
 			startTimeValue, err = parseDateTimeInLocation(date, st, loc)
@@ -550,6 +550,9 @@ func runBookmarks(cmd *cobra.Command, args []string) error {
 			endTimeValue, err = parseDateTimeInLocation(date, et, loc)
 			if err != nil {
 				return err
+			}
+			if endTime == "" {
+				endTimeValue = endTimeValue.Add(24 * time.Hour)
 			}
 		} else {
 			// Full day
@@ -591,9 +594,9 @@ func runBookmarks(cmd *cobra.Command, args []string) error {
 
 	if useAllBrowsers {
 		// Query all browsers
-		entries, err := database.QueryMultipleBrowsersBookmarks(detector, startTimeValue, endTimeValue)
-		if err != nil {
-			return fmt.Errorf("failed to query bookmarks: %v", err)
+		entries, warnings := database.QueryMultipleBrowsersBookmarks(detector, startTimeValue, endTimeValue)
+		for _, warning := range warnings {
+			fmt.Fprintf(os.Stderr, "Warning: %s\n", warning)
 		}
 
 		// Write output
@@ -616,6 +619,10 @@ func runBookmarks(cmd *cobra.Command, args []string) error {
 	var bookmarkPath string
 
 	if dbPath != "" {
+		if bType == browser.Auto {
+			return fmt.Errorf("--browser is required when using --db-path")
+		}
+
 		// Custom bookmark path provided
 		info, err := os.Stat(dbPath)
 		if err != nil {

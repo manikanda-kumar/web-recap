@@ -56,6 +56,9 @@ func FormatJSONLines(w io.Writer, entries []models.HistoryEntry) error {
 // FormatBookmarksJSON writes bookmark report as JSON to the given writer
 func FormatBookmarksJSON(w io.Writer, entries []models.BookmarkEntry, browser string, startDate, endDate time.Time, tz string) error {
 	var startPtr, endPtr *time.Time
+	if tz == "" {
+		tz = "UTC"
+	}
 
 	// Only include dates if they are specified
 	if !startDate.IsZero() {

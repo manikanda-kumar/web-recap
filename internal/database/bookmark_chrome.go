@@ -27,9 +27,9 @@ func NewChromeBookmarkHandler(bookmarkPath, browserName string) *ChromeBookmarkH
 
 // Chrome bookmark JSON structure
 type chromeBookmarkFile struct {
-	Checksum string                 `json:"checksum"`
-	Roots    chromeBookmarkRoots    `json:"roots"`
-	Version  int                    `json:"version"`
+	Checksum string              `json:"checksum"`
+	Roots    chromeBookmarkRoots `json:"roots"`
+	Version  int                 `json:"version"`
 }
 
 type chromeBookmarkRoots struct {
@@ -39,15 +39,15 @@ type chromeBookmarkRoots struct {
 }
 
 type chromeBookmarkNode struct {
-	DateAdded      string               `json:"date_added"`
-	DateModified   string               `json:"date_modified,omitempty"`
-	GUID           string               `json:"guid"`
-	ID             string               `json:"id"`
-	Name           string               `json:"name"`
-	Type           string               `json:"type"` // "folder" or "url"
-	URL            string               `json:"url,omitempty"`
-	Children       []chromeBookmarkNode `json:"children,omitempty"`
-	MetaInfo       map[string]string    `json:"meta_info,omitempty"`
+	DateAdded    string               `json:"date_added"`
+	DateModified string               `json:"date_modified,omitempty"`
+	GUID         string               `json:"guid"`
+	ID           string               `json:"id"`
+	Name         string               `json:"name"`
+	Type         string               `json:"type"` // "folder" or "url"
+	URL          string               `json:"url,omitempty"`
+	Children     []chromeBookmarkNode `json:"children,omitempty"`
+	MetaInfo     map[string]string    `json:"meta_info,omitempty"`
 }
 
 // GetBookmarks retrieves all bookmarks from Chrome
@@ -86,10 +86,7 @@ func (h *ChromeBookmarkHandler) extractFromNode(node chromeBookmarkNode, folderP
 
 		// Filter by date if time range is specified
 		if !h.startTime.IsZero() || !h.endTime.IsZero() {
-			if !h.startTime.IsZero() && dateAdded.Before(h.startTime) {
-				return bookmarks
-			}
-			if !h.endTime.IsZero() && dateAdded.After(h.endTime) {
+			if !WithinHalfOpenRange(dateAdded, h.startTime, h.endTime) {
 				return bookmarks
 			}
 		}
