@@ -88,6 +88,11 @@ web-recap bookmarks --browser chrome
 web-recap bookmarks --browser firefox
 web-recap bookmarks --browser safari
 
+# macOS Safari: if Terminal cannot read Safari's protected files,
+# use the FDA-enabled app helper instead
+web-recap-safari bookmarks --browser safari
+web-recap-safari bookmarks --browser safari -o safari-bookmarks.json
+
 # Extract from all browsers
 web-recap bookmarks --all-browsers
 
@@ -372,6 +377,11 @@ web-recap
 web-recap --browser chrome
 web-recap --browser firefox
 web-recap --browser safari
+
+# macOS Safari: if Terminal cannot read Safari's protected files,
+# use the FDA-enabled app helper instead
+web-recap-safari --browser safari --date 2025-12-15
+web-recap-safari --browser safari --date 2025-12-15 -o safari-history.json
 
 # Extract from specific date
 web-recap --date 2025-12-15
@@ -716,9 +726,49 @@ web-recap tabs -o current-tabs.json
 - **Timestamp format**: Microseconds since Unix epoch
 
 ### Safari
+
+> On macOS, Safari data is protected by system privacy controls. If `web-recap --browser safari` or `web-recap bookmarks --browser safari` fails with `operation not permitted`, install `WebRecap.app`, grant it Full Disk Access, and use `web-recap-safari` for Safari-specific commands.
+
 - **Platforms**: macOS only
 - **Database**: SQLite (`History.db`)
 - **Timestamp format**: Seconds since 2001-01-01
+
+## Safari on macOS
+
+If Safari commands fail with `operation not permitted`, macOS is blocking direct terminal access to Safari's protected files.
+
+Use this flow:
+
+```bash
+# Build the wrapper app DMG
+make dmg
+
+# Install the Safari helper script
+make install-safari-helper
+```
+
+Then:
+1. Install `WebRecap.app` from `dist/WebRecap.dmg` into `/Applications`
+2. Open **System Settings → Privacy & Security → Full Disk Access**
+3. Add `/Applications/WebRecap.app` and enable it
+4. If needed, clear quarantine:
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/WebRecap.app
+   ```
+
+Run Safari commands through the helper:
+
+```bash
+web-recap-safari bookmarks --browser safari
+web-recap-safari bookmarks --browser safari -o safari-bookmarks.json
+web-recap-safari --browser safari --date "$(date +%F)"
+web-recap-safari --browser safari --date "$(date +%F)" -o safari-history.json
+```
+
+Notes:
+- `web-recap` remains the normal CLI for Chrome, Firefox, Edge, Brave, Vivaldi, and non-protected workflows
+- `web-recap-safari` is only needed when macOS privacy prevents direct Safari access from the terminal
+- `open -a /Applications/WebRecap.app --args ...` is the underlying mechanism used by the helper
 
 ## Database Locations
 
@@ -873,9 +923,28 @@ web-recap --db-path /path/to/History
 ```
 
 ### Permission errors
-Make sure you have read access to the browser database. On macOS, you may need to grant permissions:
+Make sure you have read access to the browser database.
+
+On macOS, Safari's `History.db` and `Bookmarks.plist` are privacy-protected. If direct CLI access returns `operation not permitted`, use the app wrapper instead:
+
 ```bash
-xattr -d com.apple.quarantine ./web-recap
+# 1. Build/package the wrapper app
+make dmg
+
+# 2. Install WebRecap.app to /Applications and grant it Full Disk Access
+#    System Settings -> Privacy & Security -> Full Disk Access
+
+# 3. Install the helper
+make install-safari-helper
+
+# 4. Run Safari history/bookmarks through the helper
+web-recap-safari bookmarks --browser safari
+web-recap-safari --browser safari --date "$(date +%F)"
+```
+
+If Gatekeeper quarantine blocks the app, remove the quarantine attribute:
+```bash
+xattr -dr com.apple.quarantine /Applications/WebRecap.app
 ```
 
 ### Browser running errors
