@@ -51,8 +51,10 @@ tmp/*
 bin/
 lessons.md
 
-# Markdown files (except README.md)
+# Markdown files (except selected docs)
 *.md
 !README.md
+!SKILL.md
+!docs/**
 !data/.gitkeep
 !tmp/.gitkeep

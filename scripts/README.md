@@ -101,4 +101,4 @@ These scripts:
 
 ## For More Help
 
-See [READING_LIST.md](../READING_LIST.md) for complete documentation.
+See [READING_LIST.md](../docs/READING_LIST.md) for complete documentation.

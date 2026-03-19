@@ -269,9 +269,9 @@ For your own reading list:
 
 See [scripts/README.md](./scripts/README.md) for detailed instructions.
 
-**Quick Start**: See [QUICK_START_READING_LISTS.md](./QUICK_START_READING_LISTS.md) for a 5-minute setup guide.
+**Quick Start**: See [docs/QUICK_START_READING_LISTS.md](./docs/QUICK_START_READING_LISTS.md) for a 5-minute setup guide.
 
-**Full Documentation**: See [READING_LIST.md](./READING_LIST.md) for complete instructions.
+**Full Documentation**: See [docs/READING_LIST.md](./docs/READING_LIST.md) for complete instructions.
 
 ### Extract YouTube Watch Later
 
