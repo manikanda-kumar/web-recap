@@ -12,6 +12,8 @@ Extracts browser history and bookmarks from Chrome, Chromium, Brave, Vivaldi, Fi
 ```
 web-recap              Extract history (default)
 web-recap bookmarks    Extract bookmarks
+web-recap tabs         Extract open tabs (Chromium + Safari)
+web-recap tabs --synced  Also include tabs synced from other devices
 web-recap list         Show detected browsers
 ```
 

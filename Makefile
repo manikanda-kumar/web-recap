@@ -6,6 +6,10 @@ BINARY_NAME := web-recap
 DIST_DIR := dist
 GO := go
 GOFLAGS := -ldflags="-s -w"
+# Signing identity for WebRecap.app. Use a stable certificate (e.g. Apple
+# Development) so macOS privacy grants (Full Disk Access) survive rebuilds.
+# Ad-hoc signing ("-") breaks TCC grants on every rebuild (cdhash changes).
+SIGN_IDENTITY ?= Apple Development: manikandakumar@gmail.com (YYR6L2AUP4)
 
 # Platform targets
 LINUX_AMD64 := $(DIST_DIR)/$(BINARY_NAME)-linux-amd64
@@ -39,7 +43,12 @@ dmg:
 	chmod +x "$$APP_DIR/Contents/MacOS/WebRecap"; \
 	$(GO) build $(GOFLAGS) -o "$$APP_DIR/Contents/MacOS/web-recap-bin" ./cmd/web-recap; \
 	chmod +x "$$APP_DIR/Contents/MacOS/web-recap-bin"; \
-	codesign --force --deep --sign - "$$APP_DIR"; \
+	if security find-identity -v -p codesigning | grep -qF "$(SIGN_IDENTITY)"; then \
+	  codesign --force --deep --sign "$(SIGN_IDENTITY)" "$$APP_DIR"; \
+	else \
+	  echo "WARNING: signing identity '$(SIGN_IDENTITY)' not found; falling back to ad-hoc (TCC grants will break on rebuild)"; \
+	  codesign --force --deep --sign - "$$APP_DIR"; \
+	fi; \
 	rm -rf "$(DIST_DIR)/dmg-stage"; \
 	mkdir -p "$(DIST_DIR)/dmg-stage"; \
 	cp -R "$$APP_DIR" "$(DIST_DIR)/dmg-stage/"; \
@@ -52,7 +61,7 @@ dmg:
 install-safari-helper:
 	@echo "Installing Safari helper to /opt/homebrew/bin/web-recap-safari..."
 	@mkdir -p /opt/homebrew/bin
-	@printf '%s\n' '#!/bin/sh' 'set -eu' '' 'APP_PATH=""' 'if [ -d "/Applications/WebRecap.app" ]; then' '  APP_PATH="/Applications/WebRecap.app"' 'elif [ -d "$$HOME/Applications/WebRecap.app" ]; then' '  APP_PATH="$$HOME/Applications/WebRecap.app"' 'else' '  echo "WebRecap.app not found in /Applications or ~/Applications" >&2' '  exit 1' 'fi' '' 'if [ "$$#" -eq 0 ]; then' '  cat >&2 <<'\''EOF'\''' 'Usage:' '  web-recap-safari bookmarks --browser safari' '  web-recap-safari --browser safari --date "$$(date +%F)"' '  web-recap-safari bookmarks --browser safari -o output.json' '' 'Notes:' '  - Launches the FDA-enabled WebRecap.app via macOS '\''open'\''' '  - If you do not pass -o/--output, output is captured to a temp file and printed' '  - Intended for Safari commands where direct CLI execution is blocked by macOS privacy' 'EOF' '  exit 1' 'fi' '' 'has_output=0' 'output_path=""' 'next_is_output_path=0' 'for arg in "$$@"; do' '  if [ "$$next_is_output_path" -eq 1 ]; then' '    has_output=1' '    output_path="$$arg"' '    next_is_output_path=0' '    continue' '  fi' '' '  case "$$arg" in' '    -o|--output)' '      next_is_output_path=1' '      ;;' '    --output=*)' '      has_output=1' '      output_path=$${arg#*=}' '      ;;' '  esac' 'done' '' 'if [ "$$next_is_output_path" -eq 1 ]; then' '  echo "Missing value for -o/--output" >&2' '  exit 1' 'fi' '' 'cleanup_tmp=0' 'if [ "$$has_output" -eq 0 ]; then' '  output_path=$$(mktemp /tmp/web-recap-safari.XXXXXX.json)' '  cleanup_tmp=1' 'fi' '' 'cleanup() {' '  if [ "$$cleanup_tmp" -eq 1 ]; then' '    rm -f "$$output_path"' '  fi' '}' 'trap cleanup EXIT INT TERM' '' 'rm -f "$$output_path"' '' 'if [ "$$has_output" -eq 1 ]; then' '  open -n -a "$$APP_PATH" --args "$$@" >/dev/null 2>/dev/null' 'else' '  open -n -a "$$APP_PATH" --args "$$@" -o "$$output_path" >/dev/null 2>/dev/null' 'fi' '' 'found=0' 'prev_size=-1' 'stable_count=0' 'attempt=0' 'while [ "$$attempt" -lt 120 ]; do' '  if [ -f "$$output_path" ]; then' '    found=1' '    size=$$(wc -c < "$$output_path" | tr -d '\'' '\'')' '    if [ "$$size" = "$$prev_size" ] && [ "$$size" -gt 0 ] 2>/dev/null; then' '      stable_count=$$((stable_count + 1))' '      if [ "$$stable_count" -ge 2 ]; then' '        break' '      fi' '    else' '      stable_count=0' '      prev_size=$$size' '    fi' '  fi' '  attempt=$$((attempt + 1))' '  sleep 0.25' 'done' '' 'if [ "$$found" -ne 1 ] || [ ! -f "$$output_path" ]; then' '  echo "Timed out waiting for WebRecap.app output: $$output_path" >&2' '  exit 1' 'fi' '' 'if [ "$$cleanup_tmp" -eq 1 ]; then' '  cat "$$output_path"' 'else' '  echo "Wrote output to $$output_path"' 'fi' > /opt/homebrew/bin/web-recap-safari
+	@cp scripts/web-recap-safari.sh /opt/homebrew/bin/web-recap-safari
 	@chmod +x /opt/homebrew/bin/web-recap-safari
 	@echo "✓ Installed /opt/homebrew/bin/web-recap-safari"
 
@@ -96,6 +105,10 @@ clean:
 install: build
 	@echo "Installing web-recap..."
 	$(GO) install ./cmd/web-recap
+	@if [ -w /opt/homebrew/bin ]; then \
+		cp $(BINARY_NAME) /opt/homebrew/bin/$(BINARY_NAME); \
+		echo "✓ Installed /opt/homebrew/bin/$(BINARY_NAME)"; \
+	fi
 
 deps:
 	$(GO) mod download

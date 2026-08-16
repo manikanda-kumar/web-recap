@@ -117,7 +117,7 @@ web-recap bookmarks --start-date 2025-12-09 --end-date 2025-12-16
 
 ### Extract Open Tabs
 
-Extract currently open tabs from Chromium-based browsers (Chrome, Chromium, Edge, Brave, Vivaldi).
+Extract currently open tabs from Chromium-based browsers (Chrome, Chromium, Edge, Brave, Vivaldi) and Safari (macOS, Safari 15+).
 
 ```bash
 # Extract open tabs from all Chromium browsers
@@ -127,17 +127,33 @@ web-recap tabs
 web-recap tabs --browser chrome
 web-recap tabs --browser vivaldi
 
-# Extract from all detected Chromium browsers
+# Include tabs open on other synced devices (Pixel, other desktops)
+web-recap tabs --browser vivaldi --synced
+
+# Only remote-device tabs
+web-recap tabs --browser vivaldi --synced-only
+
+# Extract from all detected browsers
 web-recap tabs --all-browsers
+
+# Extract open tabs (and tab groups) from Safari on macOS
+web-recap tabs --browser safari
+web-recap-safari tabs --browser safari   # via WebRecap.app if Terminal lacks Full Disk Access
 
 # Save to file
 web-recap tabs -o tabs.json
 
 # Custom session path
 web-recap tabs --db-path /path/to/Sessions
+# Safari: point --db-path at the SafariTabs.db file instead
+web-recap tabs --browser safari --db-path /path/to/SafariTabs.db
 ```
 
-> **Note:** Open tabs extraction only works with Chromium-based browsers. Firefox and Safari are not yet supported. There may be a slight delay between actual browser state and what is reported, as browsers don't immediately flush session data to disk.
+> **Note:** Open tabs extraction works with Chromium-based browsers and Safari (macOS, Safari 15+). Firefox is not yet supported. There may be a slight delay between actual browser state and what is reported, as browsers don't immediately flush session data to disk.
+>
+> Safari reads open tabs from `~/Library/Containers/com.apple.Safari/Data/Library/Safari/SafariTabs.db` (the legacy `~/Library/Safari/LastSession.plist` was removed in Safari 18). Safari tab groups appear in the `group` field; each group/window gets a stable `window_id`. This path is protected by macOS privacy controls — if you get `operation not permitted`, use `web-recap-safari tabs --browser safari` with WebRecap.app granted Full Disk Access.
+>
+> `--synced` reads Chromium Sync Data (`Default/Sync Data/LevelDB`), not the local `Sessions/` SNSS files. Remote tabs stay on the other device; they appear in the JSON with `device`, `synced: true`, and tags like `["synced","pixel-9a"]`. Local SNSS tabs are unchanged. The current machine's sync session is always skipped so local tabs come only from SNSS.
 
 ### Extract Reading Lists (Medium, Substack)
 
@@ -517,6 +533,17 @@ The tool outputs open tabs in the following JSON format:
       "window_id": 1,
       "browser": "Google Chrome"
     },
+    {
+      "url": "https://example.com/phone",
+      "title": "Phone tab",
+      "domain": "example.com",
+      "active": false,
+      "window_id": 1000,
+      "browser": "Vivaldi",
+      "device": "Pixel 9a",
+      "synced": true,
+      "tags": ["synced", "pixel-9a"]
+    },
     ...
   ]
 }
@@ -629,6 +656,9 @@ The tool outputs Twitter bookmarks in the following JSON format:
   - **group**: Tab group name (if grouped, Chromium feature)
   - **window_id**: Window identifier
   - **browser**: Browser source
+  - **device**: Other-device name (only with `--synced` / `--synced-only`)
+  - **synced**: `true` for remote-device tabs
+  - **tags**: `["synced", "<device-slug>"]` on remote tabs (for Raindrop import)
 
 ### Reading List Fields
 
@@ -727,10 +757,10 @@ web-recap tabs -o current-tabs.json
 
 ### Safari
 
-> On macOS, Safari data is protected by system privacy controls. If `web-recap --browser safari` or `web-recap bookmarks --browser safari` fails with `operation not permitted`, install `WebRecap.app`, grant it Full Disk Access, and use `web-recap-safari` for Safari-specific commands.
+> On macOS, Safari data is protected by system privacy controls. If `web-recap --browser safari`, `web-recap bookmarks --browser safari`, or `web-recap tabs --browser safari` fails with `operation not permitted`, install `WebRecap.app`, grant it Full Disk Access, and use `web-recap-safari` for Safari-specific commands.
 
 - **Platforms**: macOS only
-- **Database**: SQLite (`History.db`)
+- **Database**: SQLite (`History.db`); open tabs live in `SafariTabs.db` inside Safari's container
 - **Timestamp format**: Seconds since 2001-01-01
 
 ## Safari on macOS
@@ -761,6 +791,8 @@ Run Safari commands through the helper:
 ```bash
 web-recap-safari bookmarks --browser safari
 web-recap-safari bookmarks --browser safari -o safari-bookmarks.json
+web-recap-safari tabs --browser safari
+web-recap-safari tabs --browser safari -o safari-tabs.json
 web-recap-safari --browser safari --date "$(date +%F)"
 web-recap-safari --browser safari --date "$(date +%F)" -o safari-history.json
 ```
@@ -768,6 +800,8 @@ web-recap-safari --browser safari --date "$(date +%F)" -o safari-history.json
 Notes:
 - `web-recap` remains the normal CLI for Chrome, Firefox, Edge, Brave, Vivaldi, and non-protected workflows
 - `web-recap-safari` is only needed when macOS privacy prevents direct Safari access from the terminal
+- `make dmg` signs the app with the stable identity from `SIGN_IDENTITY` (default: your Apple Development certificate). macOS ties Full Disk Access to the signing identity, so the grant survives rebuilds. If the identity is missing the build falls back to ad-hoc signing, which breaks Full Disk Access on every rebuild — re-grant it after each build in that case.
+- `web-recap-safari` converts relative `-o/--output` paths to absolute paths before launching the app
 - `open -a /Applications/WebRecap.app --args ...` is the underlying mechanism used by the helper
 
 ## Database Locations
@@ -823,6 +857,10 @@ Notes:
 - Edge: `~/Library/Application Support/Microsoft Edge/Default/Sessions/`
 - Brave: `~/Library/Application Support/BraveSoftware/Brave-Browser/Default/Sessions/`
 - Vivaldi: `~/Library/Application Support/Vivaldi/Default/Sessions/`
+
+**Synced tabs (other devices):**
+- Chrome: `~/Library/Application Support/Google/Chrome/Default/Sync Data/LevelDB/`
+- Vivaldi: `~/Library/Application Support/Vivaldi/Default/Sync Data/LevelDB/`
 
 ### Windows
 

@@ -18,19 +18,21 @@ import (
 )
 
 var (
-	browserType string
-	date        string
-	startDate   string
-	endDate     string
-	startTime   string
-	endTime     string
-	timeHour    string
-	timezone    string
-	utcMode     bool
-	outputFile  string
-	dbPath      string
-	allBrowsers bool
-	version     = "0.1.0-alpha"
+	browserType       string
+	date              string
+	startDate         string
+	endDate           string
+	startTime         string
+	endTime           string
+	timeHour          string
+	timezone          string
+	utcMode           bool
+	outputFile        string
+	dbPath            string
+	allBrowsers       bool
+	includeSyncedTabs bool
+	syncedTabsOnly    bool
+	version           = "0.1.0-alpha"
 	// Reading list flags
 	platform     string
 	sessionToken string
@@ -100,6 +102,8 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&outputFile, "output", "o", "", "Output file (default: stdout)")
 	rootCmd.PersistentFlags().StringVar(&dbPath, "db-path", "", "Custom database path")
 	rootCmd.PersistentFlags().BoolVar(&allBrowsers, "all-browsers", false, "Extract from all detected browsers")
+	tabsCmd.Flags().BoolVar(&includeSyncedTabs, "synced", false, "Also include open tabs synced from other devices")
+	tabsCmd.Flags().BoolVar(&syncedTabsOnly, "synced-only", false, "Only include tabs synced from other devices")
 
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(listCmd)
@@ -385,59 +389,89 @@ var tabsCmd = &cobra.Command{
 	Use:   "tabs",
 	Short: "Extract open browser tabs in JSON format",
 	Long: `Extract open tabs from Chromium-based browsers (Chrome, Chromium, Edge, Brave, Vivaldi)
-and output them in JSON format.
+and Safari (macOS 15+), and output them in JSON format.
 
-Note: This feature only works with Chromium-based browsers. Firefox and Safari are not supported yet.
-Also note that the browser's session files may not be immediately updated, so there may be
-a slight delay between actual browser state and what is reported.
+Note: Firefox is not supported. Also note that the browser's session files may not be
+immediately updated, so there may be a slight delay between actual browser state and
+what is reported.
+
+Safari reads open tabs (including tab groups) from SafariTabs.db in its container,
+which is protected by macOS privacy controls. If you get "operation not permitted",
+run through the WebRecap.app wrapper: web-recap-safari tabs --browser safari
+
+Use --synced to also include open tabs from other devices (Vivaldi/Chrome Sync).
+Those entries include device, synced, and tags fields. Local SNSS tabs stay
+unsynced. --synced-only returns only remote-device tabs.
 
 Examples:
   web-recap tabs                          # Extract open tabs from default Chromium browser
   web-recap tabs --browser chrome         # Extract from Chrome specifically
   web-recap tabs --browser vivaldi        # Extract from Vivaldi
-  web-recap tabs --all-browsers           # Extract from all detected Chromium browsers
+  web-recap tabs --browser vivaldi --synced
+  web-recap tabs --browser vivaldi --synced-only
+  web-recap tabs --browser safari         # Extract from Safari (macOS)
+  web-recap tabs --all-browsers           # Extract from all detected browsers
   web-recap tabs -o tabs.json             # Save to file
 `,
 	RunE: runTabs,
 }
 
 func runTabs(cmd *cobra.Command, args []string) error {
+	if includeSyncedTabs && syncedTabsOnly {
+		return fmt.Errorf("use either --synced or --synced-only, not both")
+	}
+
 	detector := browser.NewDetector()
+	wantSynced := includeSyncedTabs || syncedTabsOnly
 
 	// Determine if we should query all browsers
 	useAllBrowsers := allBrowsers || browserType == "auto"
 
 	if useAllBrowsers {
-		// Query all Chromium-based browsers
-		entries, err := database.QueryMultipleBrowsersTabs(detector)
-		if err != nil {
-			return fmt.Errorf("failed to query tabs: %v", err)
+		var entries []models.TabEntry
+		if !syncedTabsOnly {
+			local, err := database.QueryMultipleBrowsersTabs(detector)
+			if err != nil {
+				return fmt.Errorf("failed to query tabs: %v", err)
+			}
+			entries = append(entries, local...)
+		}
+		if wantSynced {
+			remote, err := database.QueryMultipleBrowsersSyncedTabs(detector, true)
+			if err != nil {
+				return fmt.Errorf("failed to query synced tabs: %v", err)
+			}
+			entries = append(entries, remote...)
+		}
+
+		// Safari stores open tabs in SafariTabs.db, not SNSS sessions.
+		// Best-effort: skip silently if unavailable (e.g. no Full Disk Access).
+		if !syncedTabsOnly {
+			if tabsDB, err := browser.GetSafariTabsDBPath(); err == nil {
+				if safariEntries, err := database.QuerySafariTabs(tabsDB); err == nil {
+					entries = append(entries, safariEntries...)
+				}
+			}
 		}
 
 		if len(entries) == 0 {
-			return fmt.Errorf("no open tabs found (only Chromium-based browsers are supported)")
+			return fmt.Errorf("no open tabs found (only Chromium-based browsers and Safari are supported)")
 		}
 
-		// Write output
-		out := os.Stdout
-		if outputFile != "" {
-			f, err := os.Create(outputFile)
-			if err != nil {
-				return fmt.Errorf("failed to create output file: %v", err)
-			}
-			defer f.Close()
-			out = f
-		}
-
-		return output.FormatTabsJSON(out, entries, "all")
+		return writeTabsJSON(entries, "all")
 	}
 
 	// Get specific browser
 	bType := browser.Type(browserType)
 
+	// Safari reads open tabs from SafariTabs.db instead of Chromium SNSS sessions
+	if bType == browser.Safari {
+		return runSafariTabs()
+	}
+
 	// Check if it's a Chromium-based browser
 	if !browser.IsChromiumBased(bType) {
-		return fmt.Errorf("tabs extraction only supported for Chromium-based browsers (chrome, chromium, edge, brave, vivaldi)")
+		return fmt.Errorf("tabs extraction only supported for Chromium-based browsers (chrome, chromium, edge, brave, vivaldi) and safari")
 	}
 
 	var b *browser.Browser
@@ -478,17 +512,76 @@ func runTabs(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Query tabs
-	entries, err := database.QueryTabs(b, sessionPath)
-	if err != nil {
-		return fmt.Errorf("failed to query tabs: %v", err)
+	var entries []models.TabEntry
+	if !syncedTabsOnly {
+		local, err := database.QueryTabs(b, sessionPath)
+		if err != nil {
+			return fmt.Errorf("failed to query tabs: %v", err)
+		}
+		entries = append(entries, local...)
+	}
+
+	if wantSynced {
+		syncPath := browser.SyncDataPathFromSessionDir(sessionPath)
+		if dbPath == "" {
+			if p, err := browser.GetSyncDataPath(b.Type); err == nil {
+				syncPath = p
+			}
+		}
+		remote, err := database.QuerySyncedTabs(b, syncPath, true)
+		if err != nil {
+			return fmt.Errorf("failed to query synced tabs: %v", err)
+		}
+		entries = append(entries, remote...)
 	}
 
 	if len(entries) == 0 {
 		return fmt.Errorf("no open tabs found")
 	}
 
-	// Write output
+	return writeTabsJSON(entries, b.Name)
+}
+
+// runSafariTabs handles `tabs --browser safari`: reads open tabs (including tab
+// groups) from SafariTabs.db in Safari's container.
+func runSafariTabs() error {
+	if includeSyncedTabs || syncedTabsOnly {
+		return fmt.Errorf("--synced/--synced-only are only supported for Chromium-based browsers")
+	}
+
+	tabsDB := dbPath
+	if tabsDB == "" {
+		var err error
+		tabsDB, err = browser.GetSafariTabsDBPath()
+		if err != nil {
+			return fmt.Errorf("failed to locate SafariTabs.db: %v", err)
+		}
+	} else {
+		info, err := os.Stat(tabsDB)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("SafariTabs.db not found: %s", tabsDB)
+			}
+			return fmt.Errorf("cannot access SafariTabs.db: %v", err)
+		}
+		if info.IsDir() {
+			return fmt.Errorf("for Safari, --db-path must point to the SafariTabs.db file, not a directory: %s", tabsDB)
+		}
+	}
+
+	entries, err := database.QuerySafariTabs(tabsDB)
+	if err != nil {
+		return fmt.Errorf("failed to query Safari tabs: %v\n\nIf this is a permissions error (operation not permitted), grant WebRecap.app\nFull Disk Access and run: web-recap-safari tabs --browser safari", err)
+	}
+
+	if len(entries) == 0 {
+		return fmt.Errorf("no open tabs found")
+	}
+
+	return writeTabsJSON(entries, "safari")
+}
+
+func writeTabsJSON(entries []models.TabEntry, browserName string) error {
 	out := os.Stdout
 	if outputFile != "" {
 		f, err := os.Create(outputFile)
@@ -498,8 +591,7 @@ func runTabs(cmd *cobra.Command, args []string) error {
 		defer f.Close()
 		out = f
 	}
-
-	return output.FormatTabsJSON(out, entries, b.Name)
+	return output.FormatTabsJSON(out, entries, browserName)
 }
 
 func runBookmarks(cmd *cobra.Command, args []string) error {

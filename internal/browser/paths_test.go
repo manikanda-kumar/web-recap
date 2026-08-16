@@ -105,6 +105,28 @@ func TestGetDarwinPath(t *testing.T) {
 	}
 }
 
+func TestGetDarwinSyncDataPath(t *testing.T) {
+	path, err := getDarwinSyncDataPath("/Users/testuser", Vivaldi)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "Library/Application Support/Vivaldi/Default/Sync Data/LevelDB"
+	if !strings.Contains(filepath.ToSlash(path), want) {
+		t.Fatalf("expected %q in %q", want, path)
+	}
+}
+
+func TestGetLinuxSyncDataPath(t *testing.T) {
+	path, err := getLinuxSyncDataPath("/home/testuser", Chrome)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := ".config/google-chrome/Default/Sync Data/LevelDB"
+	if !strings.Contains(filepath.ToSlash(path), want) {
+		t.Fatalf("expected %q in %q", want, path)
+	}
+}
+
 func TestExtractDomain(t *testing.T) {
 	// Note: ExtractDomain is in the database package, so we'd need to import it there
 	// For now, this is a placeholder for domain extraction tests

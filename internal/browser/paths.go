@@ -264,6 +264,108 @@ func getWindowsBookmarkPath(browserType Type) (string, error) {
 	}
 }
 
+// GetSyncDataPath returns the Chromium Sync Data LevelDB directory for a browser.
+// Remote-device open tabs live here as sessions-dt-* records.
+func GetSyncDataPath(browserType Type) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+
+	switch runtime.GOOS {
+	case "linux":
+		return getLinuxSyncDataPath(home, browserType)
+	case "darwin":
+		return getDarwinSyncDataPath(home, browserType)
+	case "windows":
+		return getWindowsSyncDataPath(browserType)
+	default:
+		return "", ErrUnsupportedPlatform
+	}
+}
+
+func chromiumSyncDataPath(profileDir string) string {
+	return filepath.Join(profileDir, "Sync Data", "LevelDB")
+}
+
+func getLinuxSyncDataPath(home string, browserType Type) (string, error) {
+	switch browserType {
+	case Chrome:
+		return chromiumSyncDataPath(filepath.Join(home, ".config/google-chrome/Default")), nil
+	case Chromium:
+		return chromiumSyncDataPath(filepath.Join(home, ".config/chromium/Default")), nil
+	case Edge:
+		return chromiumSyncDataPath(filepath.Join(home, ".config/microsoft-edge/Default")), nil
+	case Brave:
+		return chromiumSyncDataPath(filepath.Join(home, ".config/BraveSoftware/Brave-Browser/Default")), nil
+	case Vivaldi:
+		return chromiumSyncDataPath(filepath.Join(home, ".config/vivaldi/Default")), nil
+	case Firefox, Safari:
+		return "", ErrBrowserNotAvailable
+	case Auto:
+		return "", nil
+	default:
+		return "", ErrUnknownBrowser
+	}
+}
+
+func getDarwinSyncDataPath(home string, browserType Type) (string, error) {
+	switch browserType {
+	case Chrome:
+		return chromiumSyncDataPath(filepath.Join(home, "Library/Application Support/Google/Chrome/Default")), nil
+	case Chromium:
+		return chromiumSyncDataPath(filepath.Join(home, "Library/Application Support/Chromium/Default")), nil
+	case Edge:
+		return chromiumSyncDataPath(filepath.Join(home, "Library/Application Support/Microsoft Edge/Default")), nil
+	case Brave:
+		return chromiumSyncDataPath(filepath.Join(home, "Library/Application Support/BraveSoftware/Brave-Browser/Default")), nil
+	case Vivaldi:
+		return chromiumSyncDataPath(filepath.Join(home, "Library/Application Support/Vivaldi/Default")), nil
+	case Firefox, Safari:
+		return "", ErrBrowserNotAvailable
+	case Auto:
+		return "", nil
+	default:
+		return "", ErrUnknownBrowser
+	}
+}
+
+func getWindowsSyncDataPath(browserType Type) (string, error) {
+	appData := os.Getenv("LOCALAPPDATA")
+	if appData == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		appData = filepath.Join(home, "AppData/Local")
+	}
+
+	switch browserType {
+	case Chrome:
+		return chromiumSyncDataPath(filepath.Join(appData, `Google\Chrome\User Data\Default`)), nil
+	case Chromium:
+		return chromiumSyncDataPath(filepath.Join(appData, `Chromium\User Data\Default`)), nil
+	case Edge:
+		return chromiumSyncDataPath(filepath.Join(appData, `Microsoft\Edge\User Data\Default`)), nil
+	case Brave:
+		return chromiumSyncDataPath(filepath.Join(appData, `BraveSoftware\Brave-Browser\User Data\Default`)), nil
+	case Vivaldi:
+		return chromiumSyncDataPath(filepath.Join(appData, `Vivaldi\User Data\Default`)), nil
+	case Firefox, Safari:
+		return "", ErrBrowserNotAvailable
+	case Auto:
+		return "", nil
+	default:
+		return "", ErrUnknownBrowser
+	}
+}
+
+// SyncDataPathFromSessionDir derives Sync Data/LevelDB from a Sessions directory
+// (…/Default/Sessions → …/Default/Sync Data/LevelDB).
+func SyncDataPathFromSessionDir(sessionDir string) string {
+	return chromiumSyncDataPath(filepath.Dir(sessionDir))
+}
+
 // GetSessionPath returns the session directory path for a given browser type on the current platform
 // This is used for extracting open tabs from Chromium-based browsers
 func GetSessionPath(browserType Type) (string, error) {
@@ -354,6 +456,22 @@ func getWindowsSessionPath(browserType Type) (string, error) {
 	default:
 		return "", ErrUnknownBrowser
 	}
+}
+
+// GetSafariTabsDBPath returns the path to SafariTabs.db (macOS only).
+// Since Safari 15, open tabs live in this SQLite database inside Safari's
+// container; the legacy ~/Library/Safari/LastSession.plist was removed in Safari 18.
+func GetSafariTabsDBPath() (string, error) {
+	if runtime.GOOS != "darwin" {
+		return "", ErrBrowserNotAvailable
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(home, "Library/Containers/com.apple.Safari/Data/Library/Safari/SafariTabs.db"), nil
 }
 
 // IsChromiumBased returns true if the browser uses Chromium's SNSS session format
